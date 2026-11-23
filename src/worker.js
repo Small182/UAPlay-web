@@ -1,3 +1,4 @@
+import { handleIntegration } from './integrations.js';
 const TMDB = 'https://api.themoviedb.org/3';
 const IPTV_BASE = 'https://iptv-org.github.io/iptv/countries/';
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
@@ -14,7 +15,7 @@ function json(value, status = 200, cache = 0) {
 function error(message, status = 400) { return json({ error: message }, status); }
 function text(value, max = 100) { return String(value || '').trim().slice(0, max); }
 function pageNumber(raw) { const n = Number(raw); return Number.isInteger(n) ? Math.max(1, Math.min(500, n)) : 1; }
-const ALLOWED_SECTIONS = new Set(['trending', 'movies', 'series', 'animation', 'anime', 'cartoons']);
+const ALLOWED_SECTIONS = new Set(['trending', 'movies', 'series', 'animation', 'anime', 'cartoons', 'top', 'genre_28', 'genre_35', 'genre_18', 'genre_27', 'genre_878', 'genre_16', 'genre_10749', 'genre_99']);
 
 function item(m, forcedType) {
   const type = forcedType || m.media_type || (m.first_air_date !== undefined ? 'tv' : 'movie');
@@ -62,7 +63,9 @@ async function catalogue(params, env) {
     series: ['/discover/tv', { sort_by: 'popularity.desc', include_adult: 'false' }],
     animation: ['/discover/movie', { with_genres: '16', sort_by: 'popularity.desc', include_adult: 'false' }],
     cartoons: ['/discover/tv', { with_genres: '16', sort_by: 'popularity.desc', include_adult: 'false' }],
-    anime: ['/discover/tv', { with_genres: '16', with_original_language: 'ja', sort_by: 'popularity.desc', include_adult: 'false' }]
+    anime: ['/discover/tv', { with_genres: '16', with_original_language: 'ja', sort_by: 'popularity.desc', include_adult: 'false' }],
+    top: ['/movie/top_rated', {}],
+    ...Object.fromEntries(['28','35','18','27','878','16','10749','99'].map(g => ['genre_'+g, ['/discover/movie', {with_genres:g,sort_by:'popularity.desc',include_adult:'false'}]]))
   };
   const [path, opts] = configs[section];
   const data = await tmdbRequest(path, { ...opts, page: p }, env);
@@ -137,6 +140,8 @@ export async function handleApi(request, env) {
     if (seasonMatch) return await season(seasonMatch[1], seasonMatch[2], seasonMatch[3], env);
     const titleMatch = path.match(/^\/api\/title\/(tv|movie)\/(\d+)$/);
     if (titleMatch) return await details(titleMatch[1], titleMatch[2], env);
+    const integration = await handleIntegration(request, env);
+    if (integration) return integration;
     return error('API endpoint не знайдено', 404);
   } catch (e) {
     const status = e.status || 503;

@@ -22,8 +22,15 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Test API
         run: npm run check
+      - name: Build Cloudflare Pages drag-and-drop ZIP
+        run: npm run build:pages
+      - name: Upload Cloudflare Pages ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: uaplay-cloudflare-pages-zip
+          path: ../UAPlay-web-cloudflare-pages-v0.3.0.zip
       - name: Publish to Cloudflare Workers
-        # Do not fail CI before Cloudflare credentials have been configured.
+        # Run the tests even before the Cloudflare connection has been configured.
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
