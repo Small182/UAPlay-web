@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090b0e">
+  <meta name="description" content="UAPlay — україномовний відеокаталог, вибране та вебплеєр для iPhone, iPad, Android і комп'ютера.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="UAPlay">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <title>UAPlay — відеокаталог</title>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="main-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="UAPlay — головна">UAPlay</a>
+        <nav class="header-nav" id="side-nav" aria-label="Розділи UAPlay"></nav>
+        <div class="topbar-actions">
+          <button class="search-action" type="button" id="search-shortcut" aria-label="Пошук"><svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="10.5" r="6.6"/><path d="m16 16 5 5"/></svg><span>Пошук</span></button>
+          <button class="settings-action" type="button" id="settings-shortcut" aria-label="Налаштування"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3"/><path d="M19 14.5 21 16l-2 3-2.4-1-2.1 1-.5 2.5h-4L9.5 19l-2.1-1L5 19l-2-3 2-1.5v-3L3 10l2-3 2.4 1 2.1-1L10 4.5h4L14.5 7l2.1 1L19 7l2 3-2 1.5z"/></svg></button>
+          <time id="header-clock" class="header-clock" aria-label="Місцевий час">--:--</time>
+        </div>
+      </header>
+      <div class="topbar-heading" id="page-heading" hidden>Головна</div>
+      <main id="app-content" tabindex="-1"><div class="start-loading">Завантаження UAPlay…</div></main>
+    </div>
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Додаткова навігація"></nav>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

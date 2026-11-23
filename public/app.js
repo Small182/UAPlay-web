@@ -1,0 +1,397 @@
+const $ = selector => document.querySelector(selector);
+const content = $('#app-content');
+const modal = $('#modal-root');
+const toastBox = $('#toast');
+const ICONS = {
+  home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+  film: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M17 9h4M3 15h4M17 15h4"/>',
+  tv: '<rect x="3" y="6" width="18" height="14" rx="2"/><path d="m8 2 4 4 4-4"/>',
+  animation: '<circle cx="12" cy="12" r="9"/><path d="M8 10h.01M16 10h.01M8 15q4 4 8 0"/>',
+  anime: '<path d="M12 2 4 12l4 2-1 8 11-12-5-2z"/>',
+  heart: '<path d="M20.5 8.5c0 5-8.5 11-8.5 11s-8.5-6-8.5-11a4.8 4.8 0 0 1 8.5-3 4.8 4.8 0 0 1 8.5 3z"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.8"/><path d="m16 16 5 5"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19 14.5 21 16l-2 3-2.4-1-2.1 1-.5 2.5h-4L9.5 19l-2.1-1L5 19l-2-3 2-1.5v-3L3 10l2-3 2.4 1 2.1-1L10 4.5h4L14.5 7l2.1 1L19 7l2 3-2 1.5z"/>',
+  live: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="m9 9 6 3-6 3z"/>',
+  play: '<path d="m8 5 11 7-11 7z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+  add: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  close: '<path d="M5 5 19 19M19 5 5 19"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18M12 3c-5 5-5 13 0 18"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
+  back: '<path d="m15 18-6-6 6-6"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 10v7M14 10v7"/>'
+};
+const icon = name => `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">${ICONS[name] || ICONS.info}</svg>`;
+const NAV = [
+  ['home','Головна','home'],['movies','Фільми','film'],['series','Серіали','tv'],
+  ['animation','Мультфільми','animation'],['anime','Аніме','anime'],
+  ['iptv','IPTV','live'],['favorites','Вибране','heart'],['search','Пошук','search'],['settings','Налаштування','settings']
+];
+const MOBILE_NAV = ['home','search','favorites','iptv','settings'];
+const STORE = 'uaplay-web-v1';
+const readStore = () => { try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { return {}; } };
+const persisted = readStore();
+const state = {
+  view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
+  searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {},
+  accent: persisted.accent || 'turquoise', activeItem:null, selectedSeason:1, activePlayer:null, hls:null,
+  searchTimer:0, toastTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
+};
+const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const keyFor = item => `${item.type}:${item.id}`;
+const year = item => String(item.date || '').slice(0,4) || '—';
+const imageUrl = (path, size = 'w500') => /^\/[\w-]+\.(?:jpg|png|webp)$/i.test(path || '') ? `https://image.tmdb.org/t/p/${size}${path}` : '';
+const externalImageUrl = url => { try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.href : ''; } catch { return ''; } };
+const unique = values => [...new Map(values.map(item => [keyFor(item),item])).values()];
+function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, accent:state.accent })); } catch { toast('Не вдалося зберегти дані браузера'); } }
+function notify(message) { clearTimeout(state.toastTimer);toastBox.textContent=message;toastBox.classList.add('show');state.toastTimer=setTimeout(()=>toastBox.classList.remove('show'),3000); }
+const toast = notify;
+function applyAccent() {
+  const options = {turquoise:['#3DD7BB','61,215,187'],cyan:['#3BADE0','59,173,224'],yellow:['#F5D100','245,209,0'],orange:['#FF6A00','255,106,0'],red:['#FF2247','255,34,71'],violet:['#6A0DAD','106,13,173'],blue:['#1490D7','20,144,215'],green:['#12B89A','18,184,154'],pink:['#F42A9A','244,42,154'],white:['#FFFFFF','255,255,255']};
+  const [hex,rgb] = options[state.accent] || options.turquoise;
+  document.documentElement.style.setProperty('--accent',hex);
+  document.documentElement.style.setProperty('--accent-rgb',rgb);
+}
+async function api(path) {
+  const response = await fetch(path, { headers: { Accept:'application/json' } });
+  if (!response.ok) { let msg='Сервер недоступний';try { msg=(await response.json()).error || msg; }catch{} throw new Error(msg); }
+  const data=await response.json();
+  if (!data || typeof data!=='object') throw new Error('Неправильна відповідь API');
+  return data;
+}
+function demoSection(section) {
+  if (section === 'movies') return state.demo.filter(i => i.type === 'movie');
+  if (section === 'series') return state.demo.filter(i => i.type === 'tv');
+  if (section === 'animation') return state.demo.filter(i => i.type === 'movie' && i.genreIds?.includes(16));
+  if (section === 'anime') return state.demo.filter(i => i.genreIds?.includes(16));
+  return state.demo;
+}
+async function fetchSection(section, page=1) {
+  if (state.demoMode) return { results:page === 1 ? demoSection(section) : [], page, totalPages:1 };
+  try { return await api(`/api/catalog?section=${encodeURIComponent(section)}&page=${page}`); }
+  catch (error) { if (page !== 1) throw error; return { results:demoSection(section),page:1,totalPages:1 }; }
+}
+function posterCard(item) {
+  const img=imageUrl(item.poster,'w342');
+  return `<button type="button" class="poster-card" data-title="${safe(keyFor(item))}" aria-label="${safe(item.title)}">
+    <div class="poster-cover"><div class="poster-fallback">${safe(item.title)}</div>${img ? `<img src="${img}" loading="lazy" alt="Постер: ${safe(item.title)}">` : ''}
+    ${item.rating ? `<span class="rating-pill">★ ${Number(item.rating).toFixed(1)}</span>` : ''}</div>
+    <div class="poster-title">${safe(item.title)}</div><div class="poster-sub">${safe(year(item))} · ${item.type==='tv'?'Серіал':'Фільм'}</div>
+  </button>`;
+}
+function posterGrid(items) { return `<div class="poster-grid">${items.map(posterCard).join('')}</div>`; }
+function rail(title, items, section) {
+  if (!items?.length) return '';
+  return `<section aria-label="${safe(title)}"><div class="section-row"><h2 class="section-title">${safe(title)}</h2><button type="button" class="see-all" data-view="${section}">Усі ${icon('chevron')}</button></div><div class="poster-rail">${items.map(posterCard).join('')}</div></section>`;
+}
+function modeBanner() {
+  return state.demoMode ? `<div class="banner">${icon('info')}<span><b>Демонстраційний каталог.</b> Для актуальних фільмів і пошуку підключіть TMDB_TOKEN у Cloudflare Workers.</span></div>` : '';
+}
+function footer() {
+  return `<footer class="switch-footer"><span class="switch-footer-brand">UAPLAY</span><span class="switch-hints"><span><kbd>L</kbd> Розділ</span><span><kbd>R</kbd> Розділ</span><span><kbd>X</kbd> Пошук</span><span><kbd>−</kbd> Меню</span><span><kbd>A</kbd> Відкрити</span></span></footer><p class="tmdb-legal">This product uses the TMDB API but is not endorsed or certified by TMDB. Відеоконтент не розміщується в UAPlay.</p>`;
+}
+function buildNav() {
+  const mainTabs=['home','series','movies','animation','iptv','favorites'];
+  $('#side-nav').innerHTML=NAV.filter(([view])=>mainTabs.includes(view)).sort((a,b)=>mainTabs.indexOf(a[0])-mainTabs.indexOf(b[0])).map(([view,label]) => `<button type="button" class="nav-button ${state.view===view||(view==='animation'&&state.view==='anime')?'active':''}" data-view="${view}">${label}</button>`).join('');
+  $('#bottom-nav').innerHTML=NAV.filter(([view])=>MOBILE_NAV.includes(view)).map(([view,label,ico])=>`<button type="button" class="bottom-button ${state.view===view?'active':''}" data-view="${view}" aria-label="${label}">${icon(ico)}<span>${label}</span></button>`).join('');
+  $('#page-heading').textContent=NAV.find(([name])=>name===state.view)?.[1] || 'UAPlay';
+}
+function loadVisibleItems(items) {
+  for(const i of items || []) state.lists[keyFor(i)] = i;
+}
+const HOME_SHELVES = [
+  ['Популярні фільми','movies'],['Популярні серіали','series'],
+  ['Популярні мультфільми','animation'],['Популярні мультсеріали','anime']
+];
+function heroPanel(movie){
+  const key=movie?keyFor(movie):'';
+  const img=movie?imageUrl(movie.poster,'w342'):'';
+  return `<section class="home-hero" id="catalog-hero" aria-label="Вибраний фільм">
+    <div class="hero-content"><h1 class="hero-title" id="hero-title">${safe(movie?.title||'UAPlay')}</h1>
+      <div class="hero-meta" id="hero-meta">${movie?`${safe(year(movie))} <span>·</span> ${movie.type==='tv'?'Серіал':'Фільм'}`:''}</div>
+      <p class="hero-desc" id="hero-desc">${safe(movie?.overview||'Україномовний каталог фільмів та серіалів.')}</p>
+      <div class="hero-buttons"><button class="btn primary" id="hero-watch" data-title="${safe(key)}">▶ &nbsp;Дивитися</button>
+      <button class="btn secondary" id="hero-favorite" data-favorite="${safe(key)}">${movie&&state.favorites[key]?'✓  У вибраному':'+  У вибране'}</button></div>
+    </div>
+    <div class="hero-poster">${img?`<img src="${img}" alt="Постер: ${safe(movie.title)}">`:'<span>UAPLAY</span>'}</div>
+  </section>`;
+}
+function updateHero(movie){
+  if(!movie)return;
+  const title=$('#hero-title');if(!title)return;
+  title.textContent=movie.title||'';
+  $('#hero-meta').textContent=`${year(movie)}  ·  ${movie.type==='tv'?'Серіал':'Фільм'}`;
+  $('#hero-desc').textContent=movie.overview||'';
+  $('#hero-watch').dataset.title=keyFor(movie);
+  $('#hero-favorite').dataset.favorite=keyFor(movie);
+  $('#hero-favorite').textContent=state.favorites[keyFor(movie)]?'✓  У вибраному':'+  У вибране';
+  const poster=$('#catalog-hero .hero-poster');if(poster){const url=imageUrl(movie.poster,'w342');poster.innerHTML=url?`<img src="${url}" alt="Постер: ${safe(movie.title)}">`:'<span>UAPLAY</span>';}
+  document.querySelectorAll('.poster-card[data-home-item]').forEach(b=>b.classList.toggle('selected',b.dataset.homeItem===keyFor(movie)));
+}
+async function renderHome() {
+  const id=++state.loadId;
+  const sections=['trending','movies','series','animation','anime'];
+  if (!Object.keys(state.home).length) {
+    content.innerHTML='<div class="loading-bar"></div><div class="loading-bar" style="height:80px;margin-top:30px"></div>';
+    const results=await Promise.all(sections.map(s=>fetchSection(s).catch(()=>({results:[]}))));
+    if(id!==state.loadId)return;
+    sections.forEach((section,i)=>{state.home[section]=results[i].results||[];loadVisibleItems(state.home[section]);});
+  }
+  state.homeShelf=Math.min(state.homeShelf||0,HOME_SHELVES.length-1);
+  const [name,section]=HOME_SHELVES[state.homeShelf];
+  const items=state.home[section]||[];
+  const movie=items[0]||state.home.trending?.[0]||state.demo[0];
+  content.innerHTML=`${modeBanner()}${heroPanel(movie)}
+    <div class="shelf-toolbar"><div class="shelf-title">${safe(name)}</div><div class="shelf-actions">
+      <span class="shelf-count">${state.homeShelf+1} / ${HOME_SHELVES.length}</span>
+      <button class="shelf-arrow" data-shelf-step="-1" aria-label="Попередня добірка">↑</button>
+      <button class="shelf-arrow" data-shelf-step="1" aria-label="Наступна добірка">↓</button>
+      <button class="btn shelf-more" data-view="${section}">Більше &nbsp;›</button>
+    </div></div>
+    ${items.length?`<div class="poster-rail switch-rail" id="home-rail">${items.map(item=>posterCard(item).replace('class="poster-card"',`class="poster-card ${movie&&keyFor(item)===keyFor(movie)?'selected':''}" data-home-item="${safe(keyFor(item))}"`)).join('')}</div>`:'<div class="empty">Добірка порожня</div>'}
+    ${footer()}`;
+}
+async function renderCategory(section) {
+  const id=++state.loadId;
+  const label=NAV.find(([name])=>name===section)?.[1] || 'Каталог';
+  content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>Добірка UAPlay</p></div></div>${modeBanner()}<div class="loading-bar"></div>`;
+  const data=await fetchSection(section).catch(()=>({results:[],page:1,totalPages:1}));
+  if(id!==state.loadId) return;
+  state.page=1;state.activeCategory=section;state.categoryTotal=data.totalPages||1;state.categoryItems=data.results||[];loadVisibleItems(state.categoryItems);
+  paintCategory();
+}
+function paintCategory() {
+  const label=NAV.find(([name])=>name===state.activeCategory)?.[1]||'Каталог';
+  content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>${state.categoryItems.length} записів у добірці</p></div></div>${modeBanner()}
+    ${state.categoryItems.length?posterGrid(state.categoryItems):`<div class="empty"><div class="empty-icon">◇</div><h2>Поки немає записів</h2><p>Підключіть TMDB, щоб побачити повний каталог.</p></div>`}
+    ${state.page<state.categoryTotal?'<button class="load-more" data-more>Завантажити ще</button>':''}${footer()}`;
+}
+async function loadMore() {
+  if(state.page>=state.categoryTotal || !state.activeCategory)return;
+  const button=$('[data-more]');if(button){button.disabled=true;button.textContent='Завантаження…';}
+  try {const data=await fetchSection(state.activeCategory,state.page+1);state.page++;state.categoryItems=unique([...state.categoryItems,...data.results]);loadVisibleItems(data.results);paintCategory();}
+  catch(e){toast(e.message);if(button){button.disabled=false;button.textContent='Повторити';}}
+}
+async function renderSearch() {
+  ++state.loadId;
+  content.innerHTML=`<div class="page-intro"><div><h1>Пошук</h1><p>Знайдіть фільм або серіал за назвою</p></div></div>${modeBanner()}
+    <label class="search-box">${icon('search')}<input id="search-input" autocomplete="off" type="search" placeholder="Введіть назву фільму або серіалу…" value="${safe(state.searchQuery)}" aria-label="Назва фільму чи серіалу"></label>
+    <div id="search-results"></div>${footer()}`;
+  await performSearch();
+}
+async function performSearch() {
+  const query=state.searchQuery.trim();
+  const target=$('#search-results');if(!target)return;
+  if(query.length<2){target.innerHTML='<div class="empty"><div class="empty-icon">⌕</div><h2>Що шукаємо?</h2><p>Почніть вводити назву — результат з’явиться тут.</p></div>';return;}
+  target.innerHTML='<p class="muted">Шукаємо…</p>';
+  const id=++state.loadId;
+  let results=[];
+  try {
+    if(!state.demoMode) results=(await api(`/api/search?q=${encodeURIComponent(query)}`)).results || [];
+    else results=state.demo.filter(i=>`${i.title} ${i.originalTitle}`.toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk')));
+  } catch(e) {target.innerHTML=`<div class="empty">${safe(e.message)}</div>`;return;}
+  if(id!==state.loadId || state.view!=='search')return;
+  loadVisibleItems(results);
+  target.innerHTML=results.length?`<div class="section-row"><h2 class="section-title">Результати (${results.length})</h2></div>${posterGrid(results)}`:'<div class="empty"><h2>Нічого не знайдено</h2><p>Спробуйте іншу назву.</p></div>';
+}
+function renderFavorites() {
+  ++state.loadId;
+  const items=Object.values(state.favorites);
+  loadVisibleItems(items);
+  content.innerHTML=`<div class="page-intro"><div><h1>Вибране</h1><p>Ваш особистий список перегляду · ${items.length}</p></div></div>
+    ${items.length?posterGrid(items):`<div class="empty"><div class="empty-icon">♡</div><h2>Тут поки порожньо</h2><p>Додавайте фільми та серіали кнопкою «Вибране».</p><button type="button" class="btn primary" data-view="home">До каталогу</button></div>`}${footer()}`;
+}
+async function renderIptv() {
+  const id=++state.loadId;
+  content.innerHTML=`<div class="page-intro"><div><h1>IPTV</h1><p>Прямі трансляції з відкритих плейлистів iptv-org</p></div></div>
+    <div class="setting-control" style="margin-bottom:20px"><label for="iptv-country">Країна</label><select id="iptv-country" aria-label="Країна IPTV"><option value="ua">🇺🇦 Україна</option><option value="pl">🇵🇱 Польща</option><option value="gb">🇬🇧 Велика Британія</option><option value="us">🇺🇸 США</option><option value="de">🇩🇪 Німеччина</option></select></div>
+    <label class="search-box">${icon('search')}<input type="search" id="channel-search" value="${safe(state.channelQuery)}" placeholder="Знайти телеканал…" aria-label="Пошук телеканалів"></label><div id="iptv-results"><p class="muted">Завантажуємо канали…</p></div>${footer()}`;
+  $('#iptv-country').value=state.iptvCountry;
+  try {const result=await api(`/api/iptv?country=${state.iptvCountry}`);if(id!==state.loadId)return;state.channels=result.channels||[];paintChannels();}
+  catch(e){if(id!==state.loadId)return;$('#iptv-results').innerHTML=`<div class="empty"><h2>Не вдалося завантажити IPTV</h2><p>${safe(e.message)}</p><button type="button" class="btn primary" data-refresh-iptv>Спробувати знову</button></div>`;}
+}
+function paintChannels() {
+  const target=$('#iptv-results');if(!target)return;
+  const query=state.channelQuery.toLocaleLowerCase('uk');
+  const channels=state.channels.filter(c=>`${c.name} ${c.group}`.toLocaleLowerCase('uk').includes(query));
+  target.innerHTML=`<p class="section-note">${channels.length} каналів · деякі потоки можуть бути недоступні у Safari</p>
+    ${channels.length?`<div class="channel-grid">${channels.map(c=>{
+      const index=state.channels.indexOf(c);const logo=externalImageUrl(c.logo);
+      return `<button type="button" class="channel-card" data-channel="${index}">${logo?`<img class="channel-logo" src="${safe(logo)}" loading="lazy" alt="">`:`<div class="channel-logo" style="display:grid;place-items:center;background:#303140;color:#d7c6ff">${icon('live')}</div>`}<div style="min-width:0;flex:1"><div class="channel-name">${safe(c.name)}</div><div class="channel-group">${safe(c.group||'Прямий ефір')}</div></div>${icon('play')}</button>`;
+    }).join('')}</div>`:'<div class="empty">За вашим запитом каналів не знайдено.</div>'}`;
+}
+async function renderSettings() {
+  ++state.loadId;
+  let configured=state.tmdbConfigured;
+  try{configured=(await api('/api/health')).tmdbConfigured;}catch{}
+  state.tmdbConfigured=configured;
+  content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div></div>
+    <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
+      <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
+    <div class="settings-card"><h3>Каталог TMDB</h3><p>Статус API та доступність актуальних назв.</p>
+      <div class="status-line"><span class="status-bullet ${configured?'':'bad'}"></span>${configured?'API налаштовано':'TMDB_TOKEN не задано — увімкнено демонстраційний режим'}</div></div>
+    <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
+      <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
+    <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.2.0 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+      <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${footer()}`;
+}
+async function showView(view) {
+  if(!NAV.some(([v])=>v===view))view='home';
+  state.view=view;state.loadId++;buildNav();modal.innerHTML='';
+  if(view==='home')await renderHome();
+  else if(['movies','series','animation','anime'].includes(view))await renderCategory(view);
+  else if(view==='search')await renderSearch();
+  else if(view==='favorites')renderFavorites();
+  else if(view==='iptv')await renderIptv();
+  else await renderSettings();
+  window.scrollTo({top:0,behavior:'auto'});
+}
+function toggleFavorite(key) {
+  const item=state.lists[key] || state.activeItem;
+  if(!item)return;
+  if(state.favorites[key]){delete state.favorites[key];toast('Видалено з вибраного');}
+  else{state.favorites[key]=item;toast('Додано до вибраного');}
+  save();
+  if(state.view==='favorites')renderFavorites();
+  else if(modal.querySelector('.detail-modal')){const btn=modal.querySelector('[data-favorite]');if(btn){btn.innerHTML=`${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}`;}}
+  else if(state.view==='home')renderHome();
+}
+async function openDetails(key) {
+  const basic=state.lists[key] || state.favorites[key];
+  if(!basic)return;
+  state.activeItem=basic;state.selectedSeason=1;
+  drawDetails(basic,true);
+  if(state.demoMode)return;
+  try{const data=await api(`/api/title/${basic.type}/${basic.id}`);if(!modal.querySelector('.detail-modal')||keyFor(state.activeItem)!==key)return;state.activeItem={...basic,...data};state.lists[key]=state.activeItem;drawDetails(state.activeItem,false);}
+  catch(e){toast(e.message);drawDetails(basic,false);}
+}
+function drawDetails(item,loading=false) {
+  const poster=imageUrl(item.poster,'w500');const key=keyFor(item);
+  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal" role="dialog" aria-modal="true" aria-label="${safe(item.title)}">
+    <button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button>
+    <div class="detail-layout"><div class="detail-body"><h2>${safe(item.title)}</h2>
+      <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(year(item))}</span><span>${item.type==='tv'?'Серіал':'Фільм'}</span>${item.runtime?`<span>${item.runtime} хв</span>`:''}</div>
+      <p class="detail-description">${safe(item.overview || 'Опис відсутній.')}</p>
+      ${item.genres?.length?`<p class="section-note">${safe(item.genres.join(' · '))}</p>`:''}
+      <div class="detail-buttons"><button class="btn primary" data-player="${safe(key)}">${icon('play')} Відкрити плеєр</button>
+      <button class="btn secondary" data-favorite="${safe(key)}">${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}</button></div>
+      ${item.watch?.url?`<div class="detail-extra"><h3>Де дивитися легально</h3><p class="section-note">${safe((item.watch.services||[]).map(s=>s.name).join(', ')||'Перевірити доступні сервіси')}</p><a class="see-all" href="${safe(externalImageUrl(item.watch.url))}" target="_blank" rel="noopener noreferrer">Переглянути сервіси ↗</a></div>`:''}
+      ${item.type==='tv'?`<div class="detail-extra"><h3>Сезони й серії</h3>${item.seasonList?.length?`<div class="setting-control"><label for="season-select">Сезон</label><select id="season-select">${item.seasonList.map(s=>`<option value="${s.number}">${safe(s.title||`Сезон ${s.number}`)} · ${s.episodes} серій</option>`).join('')}</select></div><div id="episode-list" style="margin-top:13px">Обирайте сезон, щоб переглянути серії.</div>`:`<p class="section-note">${loading?'Завантажуємо список сезонів…':'Інформація про сезони недоступна у деморежимі.'}</p>`}</div>`:''}
+      ${loading?'<p class="section-note">Завантажуємо подробиці…</p>':''}
+    </div><div class="detail-poster">${poster?`<img src="${poster}" alt="Постер: ${safe(item.title)}">`: ''}</div></div></section></div>`;
+  if(item.seasonList?.length){const select=$('#season-select');if(select){select.value=String(state.selectedSeason);if(!select.value)select.selectedIndex=0;loadSeason(select.value);}}
+}
+async function loadSeason(number) {
+  const item=state.activeItem; if(!item||item.type!=='tv'||state.demoMode)return;
+  const target=$('#episode-list');if(!target)return;
+  target.innerHTML='<span class="muted">Завантажуємо серії…</span>';
+  const currentKey=keyFor(item);
+  try{
+    const data=await api(`/api/title/tv/${item.id}/season/${number}`);
+    if(keyFor(state.activeItem)!==currentKey || !$('#episode-list'))return;
+    target.innerHTML=(data.episodes||[]).map(ep=>`<div class="episode"><span class="episode-num">${ep.number}</span><div class="episode-info"><div class="episode-title">${safe(ep.title)}</div><div class="episode-desc">${safe(ep.overview||'')}</div></div></div>`).join('') || '<p class="muted">Серій не знайдено.</p>';
+  }catch(e){if($('#episode-list'))$('#episode-list').innerHTML=`<p class="muted">${safe(e.message)}</p>`;}
+}
+function cleanupPlayer() {
+  if(state.hls){state.hls.destroy();state.hls=null;}
+  const video=modal.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}
+}
+function openPlayer(item, presetUrl) {
+  cleanupPlayer();
+  const key=keyFor(item);
+  state.activePlayer={key,item};
+  const storedUrl= presetUrl || state.sources[key] || '';
+  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="player-modal" role="dialog" aria-modal="true" aria-label="Плеєр">
+    <div class="player-top"><h2>${safe(item.title)}</h2><button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button></div>
+    <div class="player-frame"><video id="video" controls playsinline webkit-playsinline preload="metadata" poster="${safe(imageUrl(item.backdrop,'w1280'))}"></video></div>
+    ${presetUrl?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
+    <div class="player-help" id="player-help">${presetUrl?'Прямий IPTV-потік. Доступність залежить від телеканалу.':'Вставте пряме HTTPS-посилання на MP4 або HLS. Для підключення пошуку потоків із джерел Switch-версії потрібен окремий модуль.'}</div>
+    </section></div>`;
+  const video=$('#video');
+  video.addEventListener('loadedmetadata',()=>{const seconds=state.progress[key]||0;if(seconds>10&&Number.isFinite(video.duration)&&seconds<video.duration-15)video.currentTime=seconds;});
+  let lastSave=0;
+  video.addEventListener('timeupdate',()=>{if(Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();state.progress[key]=Math.floor(video.currentTime);save();}});
+  video.addEventListener('ended',()=>{delete state.progress[key];save();});
+  video.addEventListener('error',()=>{const help=$('#player-help');if(help)help.textContent='Не вдалося відтворити потік. Перевірте кодек, доступність адреси, CORS або обмеження джерела.';});
+  if(presetUrl)startPlayback(presetUrl); // Browsers may require tapping Play in their native controls.
+}
+async function startPlayback(raw) {
+  const video=$('#video');if(!video)return;
+  let url;
+  try {url=new URL(raw);if(url.protocol!=='https:')throw new Error();}catch{toast('Потрібне пряме HTTPS-посилання на відео');return;}
+  if(!state.activePlayer?.key?.startsWith('iptv:')){state.sources[state.activePlayer.key]=url.href;save();}
+  if(state.hls){state.hls.destroy();state.hls=null;}
+  const isHls=/\.m3u8(?:$|[?#])/i.test(url.pathname+url.search);
+  const help=$('#player-help');
+  if(isHls && !video.canPlayType('application/vnd.apple.mpegurl')){
+    if(help)help.textContent='Підключаємо HLS для браузера…';
+    try {
+      const { default:Hls }=await import('https://cdn.jsdelivr.net/npm/hls.js@1.6.14/+esm');
+      if(!$('#video')||$('#video')!==video)return;
+      if(!Hls.isSupported())throw new Error('HLS не підтримується браузером');
+      const hls=new Hls({enableWorker:true});state.hls=hls;hls.loadSource(url.href);hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED,()=>{video.play().catch(()=>{if(help)help.textContent='Натисніть Play для початку перегляду.';});});
+      hls.on(Hls.Events.ERROR,(_e,data)=>{if(data.fatal&&help)help.textContent='Помилка HLS-потоку. Можливо, джерело блокує CORS або доступ.';});
+      return;
+    } catch(e){if(help)help.textContent='Цей браузер не підтримує потік HLS без додаткового модуля. Спробуйте Safari на iOS або MP4.';return;}
+  }
+  video.src=url.href;
+  video.play().catch(()=>{if(help)help.textContent='Натисніть Play на відео, щоб почати відтворення.';});
+}
+function closeModal(){cleanupPlayer();modal.innerHTML='';state.activePlayer=null;}
+
+async function init() {
+  applyAccent();buildNav();
+  try {state.demo=(await (await fetch('/data/demo.json')).json()).results || [];} catch {state.demo=[];}
+  loadVisibleItems(state.demo);
+  try {const health=await api('/api/health');state.tmdbConfigured=!!health.tmdbConfigured;state.demoMode=!health.tmdbConfigured;}catch{state.demoMode=true;}
+  await showView('home');
+  if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')) {
+    window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+    if(document.readyState==='complete')navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  }
+}
+
+document.addEventListener('error', event => { if (event.target instanceof HTMLImageElement) event.target.style.display='none'; }, true);
+document.addEventListener('click',async event=>{
+  const action=event.target.closest('button, [data-close]');if(!action)return;
+  if(action.matches('[data-close]')){if(event.target===action || action.matches('button'))closeModal();return;}
+  if(action.dataset.shelfStep){state.homeShelf=((state.homeShelf||0)+Number(action.dataset.shelfStep)+HOME_SHELVES.length)%HOME_SHELVES.length;await renderHome();return;}
+  if(action.dataset.view){await showView(action.dataset.view);return;}
+  if(action.dataset.title){openDetails(action.dataset.title);return;}
+  if(action.dataset.favorite){toggleFavorite(action.dataset.favorite);return;}
+  if(action.hasAttribute('data-more')){await loadMore();return;}
+  if(action.dataset.player){const key=action.dataset.player;const item=state.lists[key]||state.activeItem;if(item)openPlayer(item);return;}
+  if(action.dataset.channel!==undefined){const c=state.channels[Number(action.dataset.channel)];if(c)openPlayer({id:Number(action.dataset.channel),type:'iptv',title:c.name},c.url);return;}
+  if(action.dataset.accent){state.accent=action.dataset.accent;applyAccent();save();renderSettings();return;}
+  if(action.hasAttribute('data-refresh-iptv')){renderIptv();return;}
+  if(action.hasAttribute('data-clear-local')){if(confirm('Видалити все вибране, збережені потоки та прогрес перегляду?')){state.favorites={};state.progress={};state.sources={};save();renderSettings();toast('Локальні дані очищено');}return;}
+});
+document.addEventListener('pointerover',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
+document.addEventListener('focusin',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
+let swipeY=0,swipeX=0;document.addEventListener('touchstart',event=>{if(event.target.closest('#home-rail')){swipeY=event.touches[0].clientY;swipeX=event.touches[0].clientX;}else swipeY=0;},{passive:true});
+document.addEventListener('touchend',event=>{if(!swipeY||!event.changedTouches[0])return;const dy=event.changedTouches[0].clientY-swipeY,dx=event.changedTouches[0].clientX-swipeX;swipeY=0;if(Math.abs(dy)>65&&Math.abs(dy)>Math.abs(dx)*1.25){state.homeShelf=((state.homeShelf||0)+(dy<0?1:-1)+HOME_SHELVES.length)%HOME_SHELVES.length;renderHome();}},{passive:true});
+function updateClock(){const clock=$('#header-clock');if(clock)clock.textContent=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});}updateClock();setInterval(updateClock,30000);
+document.addEventListener('input',event=>{
+  if(event.target.id==='search-input'){state.searchQuery=event.target.value;clearTimeout(state.searchTimer);state.searchTimer=setTimeout(performSearch,320);}
+  if(event.target.id==='channel-search'){state.channelQuery=event.target.value;paintChannels();}
+});
+document.addEventListener('change',event=>{
+  if(event.target.id==='iptv-country'){state.iptvCountry=event.target.value;state.channelQuery='';renderIptv();}
+  if(event.target.id==='season-select'){state.selectedSeason=Number(event.target.value);loadSeason(event.target.value);}
+});
+document.addEventListener('submit',event=>{
+  if(event.target.id==='stream-form'){event.preventDefault();startPlayback($('#stream-url').value.trim());}
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape' && modal.innerHTML)closeModal();
+  if(event.key==='/'&&!modal.innerHTML&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)){event.preventDefault();showView('search').then(()=>$('#search-input')?.focus());}
+});
+$('#search-shortcut').addEventListener('click',()=>showView('search').then(()=>$('#search-input')?.focus()));
+$('#settings-shortcut').addEventListener('click',()=>showView('settings'));
+$('.mobile-brand')?.addEventListener('click',event=>{event.preventDefault();showView('home');});
+$('.brand').addEventListener('click',event=>{event.preventDefault();showView('home');});
+init();

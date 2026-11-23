@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local development. Never commit real secrets.
+TMDB_TOKEN=your_TMDB_API_read_access_token

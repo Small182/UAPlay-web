@@ -1,0 +1,13 @@
+{
+  "note": "Демонстраційний знімок частини каталогу UAPlay-nx. Не є живими даними TMDB.",
+  "results": [
+    {"id": 1423191,"type":"movie","title":"Resident Evil: Оселя Зла","originalTitle":"Resident Evil","overview":"Кур'єр потрапляє в епіцентр спалаху інфекції у віддаленій лікарні.","poster":"/iVI1qrZkIsbs0t0UB8FA1HGVt6b.jpg","backdrop":"/3icyRAqgakNcQn6aDVz9libFmBA.jpg","date":"2026-09-16","rating":7.49,"genreIds":[27,878,12]},
+    {"id":1368337,"type":"movie","title":"Одіссея","originalTitle":"The Odyssey","overview":"Екранізація подорожі Одіссея додому після Троянської війни.","poster":"/brhZJ4GyvJDwNaHXkIrsD4CV4re.jpg","backdrop":"/iDiTY1wA35YWzTmXLTtqaxtN6tc.jpg","date":"2026-07-15","rating":8.01,"genreIds":[12,28,14]},
+    {"id":1263337,"type":"movie","title":"Серце звіра","originalTitle":"Heart of the Beast","overview":"Після авіакатастрофи боєць та його пес намагаються вижити в Алясці.","poster":"/QwTcll5ymgLseoerf7PUo9LDZM.jpg","backdrop":"/kpqsljPQtWqPKJBTAEtoXtQZ9Ko.jpg","date":"2026-09-19","rating":7.28,"genreIds":[12,53]},
+    {"id":1381071,"type":"movie","title":"Ґодзілла: Мінус нуль","originalTitle":"ゴジラ-0.0","overview":"Світ стикається з новою загрозою гігантського монстра.","poster":"/zpcoFlZwyLnBt7bb5wmvGDCdg06.jpg","backdrop":"/oqrYIDH4tvfEzPe1yqT4jzmAWHQ.jpg","date":"2026-11-03","rating":7.95,"genreIds":[878,27,28]},
+    {"id":225385,"type":"tv","title":"Чорні голуби","originalTitle":"Black Doves","overview":"Шпигунка дізнається про вбивство коханця й шукає правди.","poster":"/5Pdp7Cm1NssS3OHGrswiS8tWNWN.jpg","backdrop":"/uyL0MH8gtDlChQKpfpkVoUP41VY.jpg","date":"2024-12-05","rating":7.04,"genreIds":[10759,9648,80]},
+    {"id":247718,"type":"tv","title":"Земля Гангстерів","originalTitle":"MobLand","overview":"Дві кримінальні династії ведуть боротьбу за владу в Лондоні.","poster":"/27eQ41onW9pDMw5KTXx1kJHz25o.jpg","backdrop":"/h0OC7ouop8YLwbAVfS3UUE2Lw4T.jpg","date":"2025-03-30","rating":8.63,"genreIds":[80,18]},
+    {"id":213375,"type":"tv","title":"Завдання Віжена","originalTitle":"VisionQuest","overview":"Віжен намагається осмислити передані йому спогади.","poster":"/unIZFImLIFyPwOOQXUUBd34Pu5t.jpg","backdrop":"/31o1Ufd7bStD5dGEcpzapOjwaqx.jpg","date":"2026-10-13","rating":8.62,"genreIds":[10765,18]},
+    {"id":279246,"type":"tv","title":"Імператриця, що вийшла заміж вдруге","originalTitle":"재혼 황후","overview":"Імператриця погоджується на розлучення за однієї умови.","poster":"/9mVhSAIZERTDw7dWbbGuJegCDjl.jpg","backdrop":"/fNcpHmuZLKoyhNMBEzdqzX8iIvg.jpg","date":"2026-11-03","rating":8.62,"genreIds":[18,10765]}
+  ]
+}
