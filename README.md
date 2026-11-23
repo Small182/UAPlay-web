@@ -61,8 +61,8 @@ git remote add origin https://github.com/Small182/UAPlay-web.git
 git push -u origin main
 ```
 
-3. В `Settings → Secrets and variables → Actions` репозиторію задайте секрети `CLOUDFLARE_API_TOKEN` (токен з обмеженим доступом Workers Scripts:Edit) та `CLOUDFLARE_ACCOUNT_ID`. GitHub Actions запускає перевірки та публікує сайт під час push у `main`.
-4. TMDB_TOKEN додайте **безпосередньо до Worker**, наприклад `npx wrangler secret put TMDB_TOKEN`, або через Cloudflare Dashboard → Worker → Settings → Variables and Secrets. Це інший секрет, ніж обліковий токен GitHub Actions.
+3. У `Settings → Secrets and variables → Actions` цього репозиторію задайте секрети `CLOUDFLARE_API_TOKEN` (токен з обмеженим доступом Workers Scripts:Edit) та `CLOUDFLARE_ACCOUNT_ID`. GitHub Actions запускає перевірки та публікує сайт під час push у `main`.
+4. Якщо секрети Cloudflare ще не задано, GitHub Actions виконує тільки тести й пропускає публікацію. TMDB_TOKEN додайте **безпосередньо до Worker**, наприклад `npx wrangler secret put TMDB_TOKEN`, або через Cloudflare Dashboard → Worker → Settings → Variables and Secrets. Це інший секрет, ніж обліковий токен GitHub Actions.
 
 Якщо локальний репозиторій уже існує, не виконуйте повторно `git init` і обережно перевірте віддалений `origin`.
 
