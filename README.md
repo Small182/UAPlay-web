@@ -1,8 +1,8 @@
 # UAPlay Web · PWA для iOS, Android і браузерів
 
-**UAPlay Web v0.3.0** — незалежний вебпорт [UAPlay для Nintendo Switch](https://github.com/Small182/UAPlay-nx). Мета — адаптивний україномовний каталог із TMDB, локальним вибраним, IPTV та браузерним плеєром, що розгортається на Cloudflare Workers. Цей репозиторій не містить змін до `UAPlay-nx`.
+**UAPlay Web v0.3.1** — незалежний вебпорт [UAPlay для Nintendo Switch](https://github.com/Small182/UAPlay-nx). Мета — адаптивний україномовний каталог із TMDB, локальним вибраним, IPTV та браузерним плеєром, що розгортається на Cloudflare Workers. Цей репозиторій не містить змін до `UAPlay-nx`.
 
-## Можливості v0.3.0
+## Можливості v0.3.1
 
 - Switch-style інтерфейс: оригінальна верхня навігація, герой-блок висотою 222 px, ряд постерів, панель кнопок, бірюзовий акцент та адаптація для iPhone.
 - Фільми, серіали, аніме, мультфільми, пошук TMDB, детальна інформація, сезони й серії (для підключеного TMDB).
@@ -13,17 +13,23 @@
 - PWA-маніфест, іконки для iOS, service worker для кешування інтерфейсу й демоданих (не відеофайлів).
 - Відображення доступних легальних провайдерів перегляду за даними TMDB, якщо вони є.
 
-> **Обмеження v0.3.0:** реалізовано пошук джерел UAFlix, UASerials, Eneyida, UAFilm, UAKino, Mikai та AnimeON через Cloudflare Worker, але не гарантовано відповідей від сторонніх сайтів. Прямі MP4/HLS визначаються автоматично лише для частини структурованих API Mikai/AnimeON. **Повний парсер плеєрів, Movy з локальним проксі, libmpv, завантаження на SD та автоматичне відтворення всіх джерел не перенесені.** IPTV, TMDB, Wallhaven, SubDL і перевірка GitHub-релізів мають окремі API. Браузер може блокувати прямі потоки через CORS, кодеки або правила джерела.
+> **Обмеження v0.3.1:** реалізовано пошук джерел UAFlix, UASerials, Eneyida, UAFilm, UAKino, Mikai та AnimeON через Cloudflare Worker, але не гарантовано відповідей від сторонніх сайтів. Прямі MP4/HLS визначаються автоматично лише для частини структурованих API Mikai/AnimeON. **Повний парсер плеєрів, Movy з локальним проксі, libmpv, завантаження на SD та автоматичне відтворення всіх джерел не перенесені.** IPTV, TMDB, Wallhaven, SubDL і перевірка GitHub-релізів мають окремі API. Браузер може блокувати прямі потоки через CORS, кодеки або правила джерела.
+
+## Важливо про ключ Switch
+
+`UAPlay-nx` використовує GitHub Actions secret `TMDB_API_KEY` (32-символьний ключ v3) під час компіляції NRO. Значення цього секрету **не можна прочитати через GitHub API**. Щоб ввімкнути каталог у вебверсії, додайте той самий ключ вручну до Cloudflare Pages або Worker як **Secret** з назвою `TMDB_API_KEY`. Не вставляйте ключ у GitHub-код, JS, ZIP, чат чи публічні налаштування.
+
+Ключ можна отримати в налаштуваннях API вашого облікового запису TMDB. Якщо на SD-карті Switch колись збережено персональний override, перевірте `switch/uaplay/tmdb.key`, проте його наявність не обов'язкова.
 
 ## Пряма публікація ZIP у Cloudflare Pages
 
-**Найпростіший шлях — окремий архів `UAPlay-web-cloudflare-pages-v0.3.0.zip`**. У нього вже входять `index.html`, PWA-ресурси, `_worker.js` з API. Не завантажуйте ZIP із вихідним кодом через drag-and-drop: його файли лежать не у корені.
+**Найпростіший шлях — окремий архів `UAPlay-web-cloudflare-pages-v0.3.1.zip`**. У нього вже входять `index.html`, PWA-ресурси, `_worker.js` з API. Не завантажуйте ZIP із вихідним кодом через drag-and-drop: його файли лежать не у корені.
 
 1. Cloudflare Dashboard → Workers & Pages → Create → Pages → **Direct Upload / Drag and drop**.
-2. Завантажте саме `UAPlay-web-cloudflare-pages-v0.3.0.zip` (не розпаковуючи, якщо форма приймає ZIP).
+2. Завантажте саме `UAPlay-web-cloudflare-pages-v0.3.1.zip` (не розпаковуючи, якщо форма приймає ZIP).
 3. Створіть проєкт та дочекайтеся успішного Deploy.
-4. У проєкті **Settings → Variables and Secrets** додайте секрет `TMDB_TOKEN` (TMDB API Read Access Token), а для SubDL за бажанням `SUBDL_TOKEN`. Потім виконайте новий Deploy, якщо Cloudflare не застосував секрети до поточної версії.
-5. Перевірте `/api/health`, `/api/providers` на вашому домені `pages.dev`. Без `TMDB_TOKEN` каталог працює в деморежимі.
+4. У проєкті **Settings → Variables and Secrets** додайте секрет `TMDB_API_KEY` (32-символьний API v3 ключ, як у Switch) або `TMDB_TOKEN` (API Read Access Token v4), а для SubDL за бажанням `SUBDL_TOKEN`. Потім виконайте новий Deploy, якщо Cloudflare не застосував секрети до поточної версії.
+5. Перевірте `/api/health`, `/api/providers` на вашому домені `pages.dev`. Без `TMDB_API_KEY` або `TMDB_TOKEN` каталог працює в деморежимі.
 
 Cloudflare Pages підтримує один файл `_worker.js` у Advanced Mode в архіві Direct Upload, на відміну від каталогу `/functions` (не компілюється під час drag-and-drop). Worker обробляє `/api/*`, усі інші шляхи передає `env.ASSETS.fetch(request)`.
 
@@ -36,7 +42,7 @@ Cloudflare Pages підтримує один файл `_worker.js` у Advanced M
 ```bash
 npm install
 cp .dev.vars.example .dev.vars
-# Вкажіть власний TMDB API Read Access Token у .dev.vars
+# Вкажіть той самий 32-символьний TMDB_API_KEY, який використовується в UAPlay-nx.
 npm run dev
 ```
 
@@ -55,10 +61,10 @@ npm run check
 ```bash
 npm install
 npx wrangler deploy
-npx wrangler secret put TMDB_TOKEN
+npx wrangler secret put TMDB_API_KEY
 ```
 
-У команді `secret put` вставте **TMDB API Read Access Token (v4)**. Він залишається на сервері, не потрапляє в клієнтський JavaScript. Після цього сайт зможе завантажувати актуальні дані TMDB. URL після деплою буде показано Wrangler (зазвичай `https://uaplay-web.<your-subdomain>.workers.dev`). Не варто додавати токен до `wrangler.jsonc` чи комітів.
+У команді `secret put` вставте **TMDB API Key v3 (32 символи)**, такий самий, як для Switch. Він залишається на сервері, не потрапляє в клієнтський JavaScript. Після цього сайт зможе завантажувати актуальні дані TMDB. URL після деплою буде показано Wrangler (зазвичай `https://uaplay-web.<your-subdomain>.workers.dev`). Не варто додавати токен до `wrangler.jsonc` чи комітів.
 
 Cloudflare Workers **Static Assets** віддає `public/`, а маршрути `/api/*` обробляє `src/worker.js` (див. `wrangler.jsonc`).
 
@@ -70,13 +76,13 @@ Cloudflare Workers **Static Assets** віддає `public/`, а маршрути
 ```bash
 git init -b main
 git add .
-git commit -m "UAPlay Web PWA v0.3.0"
+git commit -m "UAPlay Web PWA v0.3.1"
 git remote add origin https://github.com/Small182/UAPlay-web.git
 git push -u origin main
 ```
 
 3. В `Settings → Secrets and variables → Actions` репозиторію задайте секрети `CLOUDFLARE_API_TOKEN` (токен з обмеженим доступом Workers Scripts:Edit) та `CLOUDFLARE_ACCOUNT_ID`. GitHub Actions запускає перевірки та публікує сайт під час push у `main`.
-4. TMDB_TOKEN додайте **безпосередньо до Worker**, наприклад `npx wrangler secret put TMDB_TOKEN`, або через Cloudflare Dashboard → Worker → Settings → Variables and Secrets. Це інший секрет, ніж обліковий токен GitHub Actions.
+4. TMDB_API_KEY додайте **безпосередньо до Worker**, наприклад `npx wrangler secret put TMDB_API_KEY`, або через Cloudflare Dashboard → Worker → Settings → Variables and Secrets. Це інший секрет, ніж обліковий токен GitHub Actions.
 
 Якщо локальний репозиторій уже існує, не виконуйте повторно `git init` і обережно перевірте віддалений `origin`.
 
@@ -100,7 +106,7 @@ git push -u origin main
 
 ## Безпека та обмеження
 
-- API не є універсальним proxy: сервер викликає лише заздалегідь визначені зовнішні джерела (TMDB, IPTV-org, SubDL, Wallhaven, GitHub та названі сервіси пошуку). Токен TMDB зберігається у Worker secrets.
+- API не є універсальним proxy: сервер викликає лише заздалегідь визначені зовнішні джерела (TMDB, IPTV-org, SubDL, Wallhaven, GitHub та названі сервіси пошуку). Ключ TMDB зберігається у Worker secrets і не входить у публічний ZIP.
 - Клієнт надсилає відео напряму до введеної користувачем HTTPS-адреси. Це **не** обхід CORS, DRM, авторизації чи політик відеосервісу.
 - IPTV-канали завантажуються з [iptv-org](https://github.com/iptv-org/iptv), незалежного стороннього каталогу. Доступність залежить від джерел та прав на контент.
 - Без акаунта вибране/історія живуть тільки в конкретному браузері й можуть зникнути після очищення даних Safari.

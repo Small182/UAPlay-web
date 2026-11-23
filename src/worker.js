@@ -40,14 +40,32 @@ function allowed(m) {
   const countries = m.origin_country || (m.production_countries || []).map(c => c.iso_3166_1) || [];
   return m.original_language !== 'ru' && !countries.includes('RU');
 }
+// Switch builds use TMDB_API_KEY (v3, 32 hexadecimal digits). Cloudflare stores
+// the same key as a server-only secret. TMDB_TOKEN remains supported for a v4
+// API Read Access Token; accept a v3 key there too for older installations.
+function tmdbCredentials(env) {
+  const v3 = String(env?.TMDB_API_KEY || '').trim();
+  const other = String(env?.TMDB_TOKEN || '').trim();
+  if (v3) {
+    if (!/^[0-9a-f]{32}$/i.test(v3))
+      throw Object.assign(new Error('TMDB_API_KEY має бути 32-символьним ключем TMDB v3'), { status: 503 });
+    return { apiKey: v3 };
+  }
+  if (!other) return null;
+  if (/^[0-9a-f]{32}$/i.test(other)) return { apiKey: other };
+  return { bearer: other };
+}
 async function tmdbRequest(path, params, env) {
-  const token = env.TMDB_TOKEN;
-  if (!token) throw Object.assign(new Error('TMDB_NOT_CONFIGURED'), { status: 503 });
+  const credentials = tmdbCredentials(env);
+  if (!credentials) throw Object.assign(new Error('TMDB_NOT_CONFIGURED'), { status: 503 });
   const url = new URL(TMDB + path);
   url.searchParams.set('language', 'uk-UA');
   for (const [key, value] of Object.entries(params || {})) if (value !== null && value !== '') url.searchParams.set(key, String(value));
+  if (credentials.apiKey) url.searchParams.set('api_key', credentials.apiKey);
+  const headers = { Accept: 'application/json' };
+  if (credentials.bearer) headers.Authorization = `Bearer ${credentials.bearer}`;
   const response = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    headers,
     cf: { cacheTtl: 300, cacheEverything: true }
   });
   if (!response.ok) throw Object.assign(new Error(response.status === 401 ? 'Некоректний TMDB_TOKEN' : 'TMDB тимчасово недоступний'), { status: response.status === 401 ? 502 : 503 });
@@ -132,7 +150,7 @@ export async function handleApi(request, env) {
   if (request.method !== 'GET') return error('Метод не підтримується', 405);
   const path = url.pathname;
   try {
-    if (path === '/api/health') return json({ name: 'UAPlay Web', ok: true, tmdbConfigured: !!env.TMDB_TOKEN });
+    if (path === '/api/health') return json({ name: 'UAPlay Web', ok: true, tmdbConfigured: !!(env.TMDB_API_KEY || env.TMDB_TOKEN) });
     if (path === '/api/catalog') return await catalogue(url.searchParams, env);
     if (path === '/api/search') return await search(url.searchParams, env);
     if (path === '/api/iptv') return await iptv(url.searchParams);
@@ -145,7 +163,7 @@ export async function handleApi(request, env) {
     return error('API endpoint не знайдено', 404);
   } catch (e) {
     const status = e.status || 503;
-    return error(e.message === 'TMDB_NOT_CONFIGURED' ? 'TMDB_TOKEN не налаштований. Використовується демонстраційний каталог.' : (e.message || 'Помилка запиту'), status);
+    return error(e.message === 'TMDB_NOT_CONFIGURED' ? 'TMDB_API_KEY або TMDB_TOKEN не налаштований. Використовується демонстраційний каталог.' : (e.message || 'Помилка запиту'), status);
   }
 }
 export default {

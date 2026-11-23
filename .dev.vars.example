@@ -1,4 +1,5 @@
 # Copy to .dev.vars for local development. Never commit real secrets.
-TMDB_TOKEN=your_TMDB_API_read_access_token
+TMDB_API_KEY=your_32_character_TMDB_v3_API_key
+# Or use TMDB_TOKEN for the longer v4 API Read Access Token
 # Optional SubDL API key (keep it server-side)
 SUBDL_TOKEN=your_SubDL_API_key

@@ -12,7 +12,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 PUBLIC=ROOT/'public'
-TARGET=Path(sys.argv[1]) if len(sys.argv)>1 else ROOT.parent/'UAPlay-web-cloudflare-pages-v0.3.0.zip'
+TARGET=Path(sys.argv[1]) if len(sys.argv)>1 else ROOT.parent/'UAPlay-web-cloudflare-pages-v0.3.1.zip'
 INTEGRATIONS=(ROOT/'src/integrations.js').read_text()
 WORKER=(ROOT/'src/worker.js').read_text()
 INTEGRATIONS=INTEGRATIONS.replace('export async function handleIntegration(', 'async function handleIntegration(')

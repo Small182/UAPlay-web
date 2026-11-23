@@ -10,7 +10,7 @@ test('health reflects whether TMDB is configured', async () => {
 test('TMDB routes fail safely without key', async () => {
   const response = await handleApi(new Request('https://example.workers.dev/api/catalog?section=movies'), {});
   assert.equal(response.status, 503);
-  assert.match((await response.json()).error,/TMDB_TOKEN/);
+  assert.match((await response.json()).error,/TMDB_API_KEY/);
 });
 test('unknown and invalid endpoints are rejected', async () => {
   const invalid = await handleApi(new Request('https://example.workers.dev/api/title/movie/not-an-id'), {});
@@ -54,4 +54,53 @@ test('catalogue uses server-side TMDB token and normalizes public response', asy
     assert.equal(auth,'Bearer TEST_PRIVATE_TOKEN');
     assert.ok(!JSON.stringify(data).includes('TEST_PRIVATE_TOKEN'));
   } finally {globalThis.fetch=originalFetch;}
+});
+
+
+test('Switch TMDB v3 API key works server-side without exposing it to the client', async () => {
+  const originalFetch=globalThis.fetch;
+  const key='0123456789abcdef0123456789abcdef';
+  let calledUrl, calledHeaders;
+  globalThis.fetch=async (url, options) => {
+    calledUrl=new URL(url);
+    calledHeaders=options.headers;
+    return new Response(JSON.stringify({ results: [{id:42,title:'Кіно',original_language:'uk',vote_average:7.5}], total_pages:1 }), {status:200});
+  };
+  try {
+    const response=await handleApi(new Request('https://uaplay.test/api/catalog?section=movies'), {TMDB_API_KEY:key});
+    assert.equal(response.status,200);
+    assert.equal(calledUrl.searchParams.get('api_key'),key);
+    assert.equal(calledHeaders.Authorization,undefined);
+    const payload=await response.json();
+    assert.equal(payload.results.length,1);
+    assert.ok(!JSON.stringify(payload).includes(key));
+    const health=await handleApi(new Request('https://uaplay.test/api/health'), {TMDB_API_KEY:key});
+    assert.equal((await health.json()).tmdbConfigured,true);
+  } finally {globalThis.fetch=originalFetch;}
+});
+
+test('32-character TMDB key in legacy TMDB_TOKEN works as v3 key', async () => {
+  const originalFetch=globalThis.fetch;
+  const key='abcdef0123456789abcdef0123456789';
+  let auth, keyValue;
+  globalThis.fetch=async (url, options) => {
+    keyValue=new URL(url).searchParams.get('api_key');
+    auth=options.headers.Authorization;
+    return new Response(JSON.stringify({results:[],total_pages:1}),{status:200});
+  };
+  try {
+    const response=await handleApi(new Request('https://uaplay.test/api/catalog'),{TMDB_TOKEN:key});
+    assert.equal(response.status,200);
+    assert.equal(keyValue,key);
+    assert.equal(auth,undefined);
+  } finally {globalThis.fetch=originalFetch;}
+});
+
+test('invalid TMDB_API_KEY is rejected without leaking credential', async () => {
+  const invalid='this-is-not-a-valid-v3-key';
+  const response=await handleApi(new Request('https://uaplay.test/api/catalog'),{TMDB_API_KEY:invalid});
+  assert.equal(response.status,503);
+  const body=await response.json();
+  assert.match(body.error,/TMDB_API_KEY/);
+  assert.ok(!JSON.stringify(body).includes(invalid));
 });
