@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {providerFrameUrl,playerFrameUrl,browserProbeUrl,probeBrowserAccess,uakinoBestArticleUrl} from '../public/provider-frame.js';
+import {providerFrameUrl,playerFrameUrl,browserProbeUrl,probeBrowserAccess} from '../public/provider-frame.js';
 test('UAFlix and UAFilm provider pages can be opened directly',()=>{
   assert.equal(providerFrameUrl('uaflix'),'https://uafix.net/');
   assert.equal(providerFrameUrl('uafilm','/filmy/test.html'),'https://klonua.com/filmy/test.html');
@@ -62,8 +62,9 @@ test('UAKino.best explicit page mode stays on its own origin',()=>{
  assert.equal(browserProbeUrl('uakino-best','search','Test'),null);
 });
 
-test('selected UAKino article retains its complete path for browser navigation',()=>{
- assert.equal(uakinoBestArticleUrl('https://uakino.eu/films/123-example.html'),'https://uakino.best/films/123-example.html');
- assert.equal(uakinoBestArticleUrl('https://uakino.eu/series/123-example.html'),'https://uakino.best/series/123-example.html');
- for(const value of ['', 'https://uakino.eu/', 'https://evil.example/123-example.html','https://uakino.eu/123-example.html?x=1','https://uakino.eu/123-example.html#x'])assert.equal(uakinoBestArticleUrl(value),null);
+
+test('main domain accepts its own article and refuses mirror article',()=>{
+ assert.equal(providerFrameUrl('uakino-best','https://uakino.best/filmy/9-example.html'),'https://uakino.best/filmy/9-example.html');
+ assert.equal(providerFrameUrl('uakino-best','https://uakino.eu/filmy/9-example.html'),null);
+ assert.equal(playerFrameUrl('uakino-best','https://ashdi.vip/embed/example'),'https://ashdi.vip/embed/example');
 });

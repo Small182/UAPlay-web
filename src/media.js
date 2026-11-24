@@ -2,7 +2,7 @@
 // no media data is proxied and no protected/player-authenticated content is bypassed.
 export const VIDEO_PROVIDERS = Object.freeze({
   uaflix: 'uafix.net', uaserials: 'uaserials.my',
-  eneyida: 'eneyida.tv', uafilm: 'klonua.com', uakino: 'uakino.eu',
+  eneyida: 'eneyida.tv', uafilm: 'klonua.com', uakino: 'uakino.eu', 'uakino-best':'uakino.best',
   mikai: 'api.mikai.me', animeon: 'animeon.club'
 });
 const EMBED_HOSTS = new Set([
@@ -277,6 +277,24 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   }
   const availability=availabilityNotice(content);
   if(availability?.status==='access_denied')return {provider,streams:[],episodes:[],sourcePage:page,mediaStatus:availability.status,warnings:[{status:403,message:availability.message}]};
+  if(provider==='uakino-best'){
+    // Standalone player mode only: use explicit embeds supplied by the selected
+    // article and respect access and framing restrictions. No guessed ID,
+    // hidden player data, cross-origin retry or media proxy.
+    const result={provider,streams:[],episodes:[],playerEmbeds:[],sourcePage:page,warnings:[],mediaStatus:availability?.status||'no_supported_media'};
+    if(availability)return result;
+    for(const url of publicPlayerFrames(content,page).slice(0,3)){
+      try{
+        const player=await getResponse(url,page,fetcher);
+        if(!availabilityNotice(player.text)&&frameHeadersPermit(player.headers)&&FRAME_PLAYER_HOSTS.has(new URL(player.url).hostname)){
+          result.playerEmbeds.push({url:player.url,label:'Вбудований плеєр '+(result.playerEmbeds.length+1)});
+        }
+      }catch(e){result.warnings.push({stage:'player',host:new URL(url).hostname,status:e.upstreamStatus||0,message:e.message});}
+    }
+    if(result.playerEmbeds.length)result.mediaStatus='available';
+    else if(result.warnings.some(w=>[401,403,451].includes(w.status)))result.mediaStatus='access_denied';
+    return result;
+  }
   const start=parseMediaDocument(content,page);
   const frameCandidates= ['uafilm','uaflix','uakino'].includes(provider)&&!availability?publicPlayerFrames(content,page):[];
   const playlistFrames=[];

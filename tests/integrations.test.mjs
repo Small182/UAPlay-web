@@ -19,7 +19,7 @@ test('provider HTML parser only accepts URLs on original host',()=>{
 test('provider directory lists search adapters and reports Movy limitation',async()=>{
   const reply=await handleIntegration(req('/api/providers'),{});
   assert.equal(reply.status,200);const body=await reply.json();
-  assert.equal(body.providers.length,7);assert.ok(body.unsupported.some(x=>x.includes('Movy')));
+  assert.equal(body.providers.length,8);assert.ok(body.unsupported.some(x=>x.includes('Movy')));
 });
 test('Mikai search uses the upstream public API without exposing server secrets',async()=>{
   await withMockFetch(async(url,options)=>{
@@ -113,4 +113,15 @@ test('same-name movie with matching release year outranks wrong remake',async()=
 test('Mikai current documented nested ids and titles schema',()=>{
  const rows=normalizeAnime('mikai',{ok:true,result:[{ids:{mikai:21},titles:{ua:'Аніме',english:'Anime'}}]});
  assert.equal(rows[0].id,'21');assert.equal(rows[0].title,'Аніме');assert.equal(rows[0].original,'Anime');
+});
+
+test('UAKino.best catalogue search uses its own origin and exact title, not mirror ID',async()=>{
+ const html='<a class="movie-title" href="/filmy/9-example.html">Sample (2008)</a><a class="movie-title" href="/filmy/99-unrelated.html">Unrelated (2008)</a><a class="movie-title" href="/filmy/88-remake.html">Sample (2024)</a><a class="movie-title" href="https://uakino.eu/filmy/66-example.html">Sample (2008)</a>';
+ await withMockFetch(async url=>{
+  assert.equal(new URL(url).origin,'https://uakino.best');return new Response(html);
+ },async()=>{
+  const reply=await handleIntegration(req('/api/providers/search?provider=uakino-best&q=Sample&type=movie&year=2008'),{});
+  assert.equal(reply.status,200);
+  assert.deepEqual((await reply.json()).results.map(x=>x.id),['https://uakino.best/filmy/9-example.html']);
+ });
 });

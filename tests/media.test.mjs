@@ -158,3 +158,19 @@ test('UAKino diagnostic distinguishes denied playlist from denied player',async(
  assert.equal(playerDenied.warnings[0].status,403);
  assert.deepEqual(playerDenied.playerEmbeds,[]);
 });
+
+test('UAKino.best offers only separate publicly supplied iframe player',async()=>{
+ const result=await resolveProviderMedia('uakino-best','https://uakino.best/filmy/9-example.html',async url=>new Response(url.includes('uakino.best')?'<iframe src="https://ashdi.vip/embed/example"></iframe>':'Player'));
+ assert.equal(result.playerEmbeds[0].url,'https://ashdi.vip/embed/example');
+ assert.equal(result.streams.length,0);
+});
+test('UAKino.best never loads mirror or returns denied frame',async()=>{
+ let calls=0;
+ const result=await resolveProviderMedia('uakino-best','https://uakino.best/filmy/9-example.html',async url=>{
+   calls++;
+   if(url.includes('uakino.best'))return new Response('<iframe src="https://ashdi.vip/embed/example"></iframe>');
+   return new Response('',{status:403});
+ });
+ assert.equal(calls,2);assert.equal(result.mediaStatus,'access_denied');assert.deepEqual(result.playerEmbeds,[]);
+ await assert.rejects(resolveProviderMedia('uakino-best','https://uakino.eu/filmy/9-example.html',async()=>{throw Error('unexpected request')}),/Некоректна адреса/);
+});

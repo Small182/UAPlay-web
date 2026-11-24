@@ -17,7 +17,7 @@ export function providerFrameUrl(provider,value=''){
 
 const PLAYER_HOSTS=new Set(['zetvideo.net','hdvbua.pro','ashdi.vip','player.ashdi.vip','moonanime.net','moonanime.art','moon.goldenkite.top']);
 export function playerFrameUrl(provider,value){
-  if(!['uaflix','uafilm','uakino','mikai','animeon'].includes(provider)||typeof value!=='string'||value.length>4096)return null;
+  if(!['uaflix','uafilm','uakino','uakino-best','mikai','animeon'].includes(provider)||typeof value!=='string'||value.length>4096)return null;
   try{
     const u=new URL(value);
     if(u.protocol!=='https:'||u.username||u.password||u.port||!PLAYER_HOSTS.has(u.hostname))return null;
@@ -62,13 +62,3 @@ export async function probeBrowserAccess(provider,kind,value,fetcher=fetch){
   }catch{return {state:'unreadable',status:0};}
 }
 
-// Map an explicitly selected catalogue article to the corresponding browser
-// navigation on the other configured origin. No server-side retries or proxy.
-export function uakinoBestArticleUrl(value){
-  if(typeof value!=='string'||!value)return null;
-  const source=providerFrameUrl('uakino',value);
-  if(!source)return null;
-  const u=new URL(source);
-  if(u.search||u.hash||!/^\/(?:[^/]+\/)*\d{1,10}-[^/]+\.html$/i.test(u.pathname))return null;
-  return providerFrameUrl('uakino-best',u.pathname);
-}
