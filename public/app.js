@@ -1,5 +1,5 @@
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
-import { episodeChoices } from './episode-choices.js';
+import { episodeChoices, providerEpisodeFrames } from './episode-choices.js';
 const $ = selector => document.querySelector(selector);
 const content = $('#app-content');
 const modal = $('#modal-root');
@@ -434,7 +434,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.23 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.24 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
@@ -504,7 +504,7 @@ function switchScreen(title,body,back='close'){
 }
 function showSources(item){
   cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';state.sourceResults=[];state.activeSource=null;
-  const extra=item.type==='tv'?`<p class="switch-subtitle">${safe(item.title)} · Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}</p><button class="btn secondary" data-back-episodes>Змінити серію</button>`:'';
+  const extra=item.type==='tv'?`<p class="switch-subtitle">${safe(item.title)} · Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}</p>`:'';
   modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
 `,item.type==='tv'?'episodes':'close');
 }
@@ -566,7 +566,7 @@ function openEmbeddedPlayer(provider,value){
   modal.innerHTML=switchScreen(state.activeItem?.title||'Вбудований плеєр',`<div class="provider-embed">
     <iframe class="provider-video-frame" src="${safe(target)}" title="Відеоплеєр джерела" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen; autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
     <div class="provider-browser-actions"><button class="btn secondary" type="button" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}">Назад до варіантів</button></div>
-    <p class="section-note">Керування відтворенням надає сам плеєр. Якщо джерело не дозволяє вбудовування, оберіть інший варіант.</p>
+    <p class="section-note">${provider==='uafilm'&&state.activeItem?.type==='tv'?'Оберіть потрібний сезон і серію у вбудованому плеєрі. ':''}Керування відтворенням надає сам плеєр. Якщо джерело не дозволяє вбудовування, оберіть інший варіант.</p>
     </div>`,'providers');
 }
 function renderStreamChoices(data){
@@ -581,7 +581,7 @@ function renderStreamChoices(data){
   const emptyMessage=data.mediaStatus==='licensed'?'Mikai не надає плеєр для цього ліцензованого аніме.':(episodes.length&&streams.length)||data.playerEmbeds?.some(p=>p.episode)?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
   const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):(isTV?`Варіант ${i+1}${stream.voice&&stream.voice!==stream.label?' · '+stream.voice:''}`:stream.label||stream.voice||`Варіант ${i+1}`))} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const unknownList=unverified.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>Варіант ${i+1} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
-  const frames=(isTV?matching.frames:(Array.isArray(data.playerEmbeds)?data.playerEmbeds:[])).map(p=>({url:playerFrameUrl(source.provider,p.url),label:p.label})).filter(p=>p.url);
+  const frames=(isTV?providerEpisodeFrames(source.provider,data,matching): (Array.isArray(data.playerEmbeds)?data.playerEmbeds:[])).map(p=>({url:playerFrameUrl(source.provider,p.url),label:p.label})).filter(p=>p.url);
   state.playerEmbeds=frames.map(p=>p.url);
   const frameList=frames.map((p,i)=>`<button class="switch-row" type="button" data-embed-provider="${safe(source.provider)}" data-embed-url="${safe(p.url)}"><span class="row-index">${choices.length+i+1}.</span><span>${safe(p.label||'Вбудований плеєр')} · Web</span><span class="row-trailing">▶</span></button>`).join('');
   const fallback=source.url?`<a class="source-external" href="${safe(source.url)}" rel="noopener noreferrer" target="_blank">Відкрити сторінку джерела ↗</a>`:'';

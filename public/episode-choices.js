@@ -23,3 +23,13 @@ export function episodeChoices(data,{season,episode,sourceSeason=0}){
  const frames=(Array.isArray(data.playerEmbeds)?data.playerEmbeds:[]).filter(matches);
  return {selected,unverified,frames};
 }
+
+ // UAFilm's own player exposes its own episode selector. It is not a direct
+ // episode URL; do not claim that the requested episode was selected.
+export function providerEpisodeFrames(provider,data,matching){
+ const exact=matching.frames||[];
+ if(provider!=='uafilm'||exact.length)return exact;
+ return (Array.isArray(data.playerEmbeds)?data.playerEmbeds:[])
+  .filter(p=>!p.season&&!p.episode)
+  .map(p=>({...p,label:'Вбудований плеєр · оберіть серію в плеєрі'}));
+}

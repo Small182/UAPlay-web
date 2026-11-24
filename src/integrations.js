@@ -133,16 +133,32 @@ function parseHtmlSearch(provider,html,type='') {
     if(provider==='uafilm'&&!/\b(?:card-link__text|card-title__block)\b/.test(cls)&&!classLabel(piece,'card-link__text|card-title__block'))continue;
     let label=piece.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1]||
       classLabel(piece,'th-title(?!-oname)|movie-title|short_title|card-link__text|card-title__block|search-result-title')||attr(opening,'title')||'';
-    if(!label&&provider==='uaserials'){
-      // Switch-style adjacent title, bounded by the next article link.
+    let original=classLabel(piece,'th-title-oname|original-title');
+    if(provider==='uaserials'){
       const img=piece.match(/<img\b[^>]*>/i)?.[0]||'';
+      const current=articleLink(provider,href,type);
       const next=html.slice(anchors.lastIndex,anchors.lastIndex+900);
-      const boundary=[...next.matchAll(/<a\b[^>]*>/gi)].find(x=>articleLink(provider,attr(x[0],'href'),type));
+      const boundary=[...next.matchAll(/<a\b[^>]*>/gi)].find(x=>{
+        const target=articleLink(provider,attr(x[0],'href'),type);
+        return target&&target!==current;
+      });
       const bounded=boundary?next.slice(0,boundary.index):next;
-      label=classLabel(bounded,'th-title(?!-oname)')||attr(img,'alt')||attr(img,'title');
+      label=classLabel(piece,'th-title(?!-oname)')||classLabel(bounded,'th-title(?!-oname)')||label||attr(img,'alt')||attr(img,'title');
+      original=original||classLabel(bounded,'th-title-oname|original-title');
     }
     if(!label)label=piece.slice(opening.length).replace(/<\/a\s*>$/i,'');
-    add(href,label,classLabel(piece,'th-title-oname|original-title'));
+    add(href,label,original);
+  }
+  // Klon catalogue cards may keep the title outside the link, as on Switch.
+  if(provider==='uafilm'){
+    const cards=[...html.matchAll(/class\s*=\s*["'][^"']*\bshort-news__(?:slide-item|small)\b[^"']*["']/gi)];
+    for(let k=0;k<cards.length;k++){
+      const start=cards[k].index,end=Math.min(cards[k+1]?.index??html.length,start+3500);
+      const piece=html.slice(start,end);
+      const label=classLabel(piece,'card-link__text|card-title__block');if(!label)continue;
+      const link=[...piece.matchAll(/<a\b[^>]*>/gi)].find(x=>articleLink(provider,attr(x[0],'href'),type));
+      if(link)add(attr(link[0],'href'),label);
+    }
   }
   // Eneyida stores its title and anchor within the same article.
   if(provider==='eneyida'){

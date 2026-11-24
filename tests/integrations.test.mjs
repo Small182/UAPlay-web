@@ -151,3 +151,14 @@ test('UASerials accepts the Switch-style adjacent title in the same card',()=>{
  const html='<a href="/1-sample-2011.html"><img src="/poster.jpg"></a><div class="th-title">Sample</div><a href="/2-other.html"><span class="th-title">Other</span></a>';
  assert.deepEqual(parseHtmlSearch('uaserials',html).map(x=>[x.id,x.title]),[['https://uaserials.my/1-sample-2011.html','Sample'],['https://uaserials.my/2-other.html','Other']]);
 });
+
+test('UASerials keeps the original title of adjacent same-article links',()=>{
+ const html='<a href="/1-sample-2011.html"><img src="/poster.jpg"></a><a href="/1-sample-2011.html"><span class="th-title">Зразок</span></a><span class="th-title-oname">Sample</span><a href="/2-other.html"><span class="th-title">Other</span></a>';
+ const rows=parseHtmlSearch('uaserials',html);
+ assert.equal(rows[0].title,'Зразок');assert.equal(rows[0].original,'Sample');
+ assert.equal(rows.length,2);
+});
+test('UAFilm reads title and URL from the same short-news card',()=>{
+ const html='<div class="short-news__small"><a href="/serialy/1-example.html"><img src="/a.jpg"></a><div class="card-title__block">Example</div></div><div class="short-news__small"><a href="/serialy/2-other.html"><img src="/b.jpg"></a><div class="card-title__block">Other</div></div>';
+ assert.deepEqual(parseHtmlSearch('uafilm',html,'tv').map(x=>x.title),['Example','Other']);
+});
