@@ -433,7 +433,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.16 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.17 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
@@ -848,3 +848,11 @@ $('#settings-shortcut').addEventListener('click',()=>showView('settings'));
 $('.mobile-brand')?.addEventListener('click',event=>{event.preventDefault();showView('home');});
 $('.brand').addEventListener('click',event=>{event.preventDefault();showView('home');});
 init();
+/* Safari may still rubber-band a fixed document; suppress vertical home gestures only. */
+let homeTouchX=0,homeTouchY=0;
+document.addEventListener('touchstart',event=>{if(event.touches.length===1){homeTouchX=event.touches[0].clientX;homeTouchY=event.touches[0].clientY;}},{passive:true});
+document.addEventListener('touchmove',event=>{
+  if(state.view!=='home'||modal.innerHTML||event.touches.length!==1)return;
+  const dx=Math.abs(event.touches[0].clientX-homeTouchX),dy=Math.abs(event.touches[0].clientY-homeTouchY);
+  if(dy>dx&&event.cancelable)event.preventDefault();
+},{passive:false});
