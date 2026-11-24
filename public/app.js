@@ -403,7 +403,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.1 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.2 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
@@ -447,7 +447,6 @@ function drawDetails(item,loading=false) {
       ${item.genres?.length?`<p class="section-note">${safe(item.genres.join(' · '))}</p>`:''}
       <div class="detail-buttons"><button class="btn primary" data-sources="${safe(key)}">${icon('play')} Дивитися</button>
       <button class="btn secondary" data-favorite="${safe(key)}">${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}</button><button class="btn secondary" data-mark-watched="${safe(key)}">${state.history[key]?.completed?'Переглянуто':'Позначити переглянутим'}</button></div>
-      ${item.watch?.url?`<div class="detail-extra"><h3>Де дивитися легально</h3><p class="section-note">${safe((item.watch.services||[]).map(s=>s.name).join(', ')||'Перевірити доступні сервіси')}</p><a class="see-all" href="${safe(externalImageUrl(item.watch.url))}" target="_blank" rel="noopener noreferrer">Переглянути сервіси ↗</a></div>`:''}
       ${item.type==='tv'?`<div class="detail-extra"><h3>Сезони й серії</h3>${item.seasonList?.length?`<div class="setting-control"><label for="season-select">Сезон</label><select id="season-select">${item.seasonList.map(s=>`<option value="${s.number}">${safe(s.title||`Сезон ${s.number}`)} · ${s.episodes} серій</option>`).join('')}</select></div><div id="episode-list" style="margin-top:13px">Обирайте сезон, щоб переглянути серії.</div>`:`<p class="section-note">${loading?'Завантажуємо список сезонів…':'Інформація про сезони недоступна у деморежимі.'}</p>`}</div>`:''}
       ${loading?'<p class="section-note">Завантажуємо подробиці…</p>':''}
     </div><div class="detail-poster">${poster?`<img src="${poster}" alt="Постер: ${safe(item.title)}">`: ''}</div></div></section></div>`;
@@ -500,9 +499,10 @@ function renderStreamChoices(data){
   const episodes=Array.isArray(data.episodes)?data.episodes:[];
   const filtered=episodes.filter(s=>!s.season||s.season===state.selectedSeason).filter(s=>!s.episode||s.episode===state.selectedEpisode);
   const choices=state.activeItem?.type==='tv'&&episodes.some(s=>s.season||s.episode)?filtered:streams;
+  const emptyMessage=episodes.length&&streams.length?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
   const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const fallback=source.url?`<a class="source-external" href="${safe(source.url)}" rel="noopener noreferrer" target="_blank">Відкрити сторінку джерела ↗</a>`:'';
-  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${list||'<p class="switch-subtitle">Сумісне відео для вибраного матеріалу не знайдено. Оберіть інше джерело.</p>'}</div>${!choices.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${fallback}`, 'providers');
+  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${list||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${fallback}`, 'providers');
 }
 async function playProviderMedia(provider,id){
   const item=state.activeItem;if(!item)return;

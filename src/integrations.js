@@ -70,7 +70,7 @@ function articleLink(provider,value,type=''){
 function normalizedTitle(s){
   return String(s||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 }
-function rankSources(results,local,original=''){
+function rankSources(results,local,original='',strict=false){
   const a=normalizedTitle(local),b=normalizedTitle(original);
   const score=(x)=>Math.max(0,...String(x.title||'').split('/').map(part=>{
     const n=normalizedTitle(part);
@@ -85,7 +85,7 @@ function rankSources(results,local,original=''){
   }));
   const ranked=results.map(item=>({item,score:score(item)})).sort((x,y)=>y.score-x.score);
   const top=ranked[0]?.score||0;
-  return ranked.filter(x=>top>=110?x.score>=100:top>=68?x.score>0:true).map(x=>x.item);
+  return ranked.filter(x=>top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true).map(x=>x.item);
 }
 function parseHtmlSearch(provider,html,type='') {
   const conf=PROVIDERS[provider];if(!conf)return [];
@@ -148,7 +148,7 @@ async function providerSearch(params) {
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
     results=normalizeAnime(provider,payload);
   }else results=parseHtmlSearch(provider,body,type);
-  results=rankSources(results,query,original).slice(0,18);
+  results=rankSources(results,query,original,provider==='uafilm').slice(0,18);
   return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,60);
 }
 async function providerMedia(params) {

@@ -53,6 +53,12 @@ export function parseMediaDocument(body,base) {
   if(typeof body!=='string')return {streams:[],embeds:[],episodes:[]};
   const decoded=decodeMarkup(body);
   const streams=pickVideoLinks(decoded,base);
+  // Native HTML video sources may use relative URLs rather than absolute links.
+  for(const tag of body.matchAll(/<(?:video|source)\b[^>]*>/gi)){
+    const raw=tag[0].match(/\s+src\s*=\s*(["'])(.*?)\1/i)?.[2];
+    if(!raw)continue;
+    const media=validMedia(raw,base);if(media)streams.push(media);
+  }
   const episodes=[];
   const seen=new Set();
   const li=/<li\b([^>]*)>([\s\S]*?)<\/li>/gi;
@@ -158,7 +164,7 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
     return {provider,streams,episodes,sourcePage:page};
   }
   const start=parseMediaDocument(content,page);
-  const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[]};
+  const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[],embedCount:start.embeds.length};
   const pending=start.embeds.map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
   // Follow at most five explicit iframe links and two levels, never arbitrary URLs.
   while(pending.length && visited.size<6){
@@ -173,5 +179,6 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   }
   result.streams=uniqueItems(result.streams).slice(0,50);
   result.episodes=uniqueItems(result.episodes).slice(0,80);
+  result.mediaStatus=result.streams.length?'available':result.warnings.some(w=>[401,403,451].includes(w.status))?'access_denied':result.warnings.length?'upstream_error':result.embedCount?'no_supported_media':'no_public_media';
   return result;
 }

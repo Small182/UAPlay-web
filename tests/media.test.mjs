@@ -60,3 +60,12 @@ test('embedded 403 is reported',async()=>{
   const out=await resolveProviderMedia('uaflix','https://uafix.net/a',async url=>url.includes('uafix.net')?new Response('<iframe src="https://ashdi.vip/example"></iframe>'):new Response('',{status:403}));
   assert.equal(out.streams.length,0);assert.equal(out.warnings[0].status,403);
 });
+
+test('native HTML video elements resolve relative URLs',()=>{
+  const out=parseMediaDocument('<video controls><source src="/media/sample.mp4" type="video/mp4"></video>','https://klonua.com/film/test');
+  assert.equal(out.streams[0].url,'https://klonua.com/media/sample.mp4');
+});
+test('empty video document has explicit media status',async()=>{
+  const out=await resolveProviderMedia('uafilm','https://klonua.com/test',async()=>new Response('<html><h1>Test</h1></html>'));
+  assert.equal(out.mediaStatus,'no_public_media');
+});

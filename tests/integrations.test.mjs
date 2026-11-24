@@ -83,3 +83,11 @@ test('exact catalogue title outranks unrelated article and menu',async()=>{
     assert.deepEqual(body.results.map(x=>x.title),['Test title']);
   });
 });
+
+test('UAFilm search excludes entirely unrelated titles',async()=>{
+  const html='<a class="card-link__text" href="/filmy/12-unrelated.html">Unrelated movie</a>';
+  await withMockFetch(async()=>new Response(html),async()=>{
+    const response=await handleIntegration(req('/api/providers/search?provider=uafilm&q=Exact%20title&type=movie'),{});
+    assert.equal(response.status,200);assert.deepEqual((await response.json()).results,[]);
+  });
+});
