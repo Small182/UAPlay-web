@@ -51,6 +51,7 @@ function notify(message) { clearTimeout(state.toastTimer);toastBox.textContent=m
 const toast = notify;
 function applyAccent() {
   document.documentElement.dataset.theme=state.theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',state.theme==='light'?'#f5f7f9':'#0f1215');
   const options = {turquoise:['#3DD7BB','61,215,187'],cyan:['#3BADE0','59,173,224'],yellow:['#F5D100','245,209,0'],orange:['#FF6A00','255,106,0'],red:['#FF2247','255,34,71'],violet:['#6A0DAD','106,13,173'],blue:['#1490D7','20,144,215'],green:['#12B89A','18,184,154'],pink:['#F42A9A','244,42,154'],white:['#FFFFFF','255,255,255']};
   const [hex,rgb] = options[state.accent] || options.turquoise;
   document.documentElement.style.setProperty('--accent',hex);
@@ -227,17 +228,35 @@ async function renderCategory(section) {
   paintCategory();
 }
 function sortControl(){return '<div class="setting-control"><label for="catalog-sort">Сортування</label><select id="catalog-sort">'+[['popularity','Популярність'],['newest','Найновіші'],['oldest','Найстаріші'],['rating','Рейтинг']].map(([v,t])=>'<option value="'+v+'" '+(state.sort===v?'selected':'')+'>'+t+'</option>').join('')+'</select></div>';}
+let categoryObserver=null;
+let categoryLoading=null;
 function paintCategory() {
   const label=NAV.find(([name])=>name===state.activeCategory)?.[1]||'Каталог';
   content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>${state.categoryItems.length} записів у добірці</p></div></div>${modeBanner()}
     ${animationTabs(state.activeCategory)}${sortControl()}${state.categoryItems.length?posterGrid(state.categoryItems):`<div class="empty"><div class="empty-icon">◇</div><h2>Поки немає записів</h2><p>Підключіть TMDB, щоб побачити повний каталог.</p></div>`}
-    ${state.page<state.categoryTotal?'<button class="load-more" data-more>Завантажити ще</button>':''}`;
+    ${state.page<state.categoryTotal?'<div id="catalog-sentinel" class="catalog-sentinel" role="status" aria-live="polite"></div>':''}`;
+  observeCategory();
+}
+function observeCategory(){
+  categoryObserver?.disconnect();
+  const sentinel=$('#catalog-sentinel');if(!sentinel)return;
+  categoryObserver=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting))loadMore();},{rootMargin:'240px'});
+  categoryObserver.observe(sentinel);
 }
 async function loadMore() {
   if(state.page>=state.categoryTotal || !state.activeCategory)return;
-  const button=$('[data-more]');if(button){button.disabled=true;button.textContent='Завантаження…';}
-  try {const data=await fetchSection(state.activeCategory,state.page+1);state.page++;state.categoryItems=unique([...state.categoryItems,...data.results]);loadVisibleItems(data.results);paintCategory();}
-  catch(e){toast(e.message);if(button){button.disabled=false;button.textContent='Повторити';}}
+  const generation=state.loadId,section=state.activeCategory,page=state.page+1;
+  if(state.view!==section||categoryLoading===generation)return;
+  const sentinel=$('#catalog-sentinel');if(!sentinel)return;
+  categoryLoading=generation;sentinel.textContent='Завантаження…';
+  let success=false;
+  try{const data=await fetchSection(section,page);if(state.loadId!==generation||state.view!==section)return;
+    state.page=page;state.categoryTotal=data.totalPages||state.categoryTotal;
+    state.categoryItems=unique([...state.categoryItems,...(data.results||[])]);loadVisibleItems(data.results);
+    success=true;
+  }catch(e){if(sentinel.isConnected)sentinel.textContent='Не вдалося завантажити. Прокрутіть ще раз.';}
+  finally{if(categoryLoading===generation)categoryLoading=null;if(success&&state.loadId===generation)paintCategory();}
+
 }
 async function renderSearch() {
   ++state.loadId;
@@ -414,12 +433,12 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.15 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.16 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
   if(!NAV.some(([v])=>v===view)&&!HOME_SHELVES.some(([,v])=>v===view))view='home';
-  state.view=view;state.loadId++;buildNav();modal.innerHTML='';
+  categoryObserver?.disconnect();state.view=view;state.loadId++;buildNav();modal.innerHTML='';window.scrollTo(0,0);
   if(view==='home')await renderHome();
   else if(['movies','series','animation','cartoons','anime'].includes(view)||HOME_SHELVES.some(([,v])=>v===view))await renderCategory(view);
   else if(view==='search')await renderSearch();
