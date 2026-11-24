@@ -3,23 +3,23 @@ import assert from 'node:assert/strict';
 import { handleIntegration, normalizeAnime, parseHtmlSearch, PROVIDERS } from '../src/integrations.js';
 const req = (path) => new Request('https://uaplay-web.pages.dev'+path);
 async function withMockFetch(mock,fn){const existing=globalThis.fetch;globalThis.fetch=mock;try{return await fn();}finally{globalThis.fetch=existing;}}
-test('all seven Nintendo Switch catalog sources are registered',()=>{
-  assert.deepEqual(Object.keys(PROVIDERS),['uaflix','uaserials','eneyida','uafilm','uakino','mikai','animeon']);
+test('only five enabled Web catalogue sources are registered',()=>{
+  assert.deepEqual(Object.keys(PROVIDERS),['uaserials','eneyida','uafilm','mikai','animeon']);
 });
 test('normalize Mikai and AnimeON API data',()=>{
   assert.deepEqual(normalizeAnime('mikai',{result:[{mikai:18,ua:'Тестове аніме'}]})[0].id,'18');
   assert.deepEqual(normalizeAnime('animeon',{results:[{id:5,titleUa:'Аніме'}]})[0].title,'Аніме');
 });
 test('provider HTML parser only accepts URLs on original host',()=>{
-  const body='<a class="sres-wrap" href="https://uafix.net/films/test-film/"><h2>Тестовий фільм</h2></a>'+
-    '<a class="sres-wrap" href="https://untrusted.example/bad"><h2>Other</h2></a>';
-  const sources=parseHtmlSearch('uaflix',body);
+  const body='<a class="card-link__text" href="https://klonua.com/filmy/123-test.html">Тестовий фільм</a>'+
+    '<a class="card-link__text" href="https://untrusted.example/filmy/123-bad.html">Other</a>';
+  const sources=parseHtmlSearch('uafilm',body);
   assert.equal(sources.length,1);assert.equal(sources[0].title,'Тестовий фільм');
 });
 test('provider directory lists search adapters and reports Movy limitation',async()=>{
   const reply=await handleIntegration(req('/api/providers'),{});
   assert.equal(reply.status,200);const body=await reply.json();
-  assert.equal(body.providers.length,8);assert.ok(body.unsupported.some(x=>x.includes('Movy')));
+  assert.equal(body.providers.length,5);assert.ok(body.unsupported.some(x=>x.includes('Movy')));
 });
 test('Mikai search uses the upstream public API without exposing server secrets',async()=>{
   await withMockFetch(async(url,options)=>{
@@ -45,7 +45,7 @@ test('SubDL token required and never serialized to browser',async()=>{
 });
 test('provider media rejects invalid IDs and URLs',async()=>{
   assert.equal((await handleIntegration(req('/api/providers/media?provider=mikai&id=http%3A%2F%2Flocalhost'),{})).status,400);
-  assert.equal((await handleIntegration(req('/api/providers/media?provider=uakino&id=42'),{})).status,400);
+  assert.equal((await handleIntegration(req('/api/providers/media?provider=uafilm&id=42'),{})).status,400);
 });
 test('Wallhaven safe wallpaper search',async()=>{
   await withMockFetch(async(url)=>{
@@ -58,7 +58,7 @@ test('Wallhaven safe wallpaper search',async()=>{
 });
 test('provider search reports upstream 403',async()=>{
   let n=0;await withMockFetch(async()=>{n++;return new Response('',{status:403});},async()=>{
-    const reply=await handleIntegration(req('/api/providers/search?provider=uaflix&q=Test'),{});
+    const reply=await handleIntegration(req('/api/providers/search?provider=uaserials&q=Test'),{});
     assert.equal(reply.status,502);assert.equal((await reply.json()).upstreamStatus,403);
   });assert.equal(n,1);
 });
@@ -69,10 +69,6 @@ test('UASerials navigation and season filters never become search results',()=>{
   assert.equal(parseHtmlSearch('uaserials',menu).length,0);
   assert.equal(parseHtmlSearch('uaserials',menu+valid).length,1);
   assert.equal(parseHtmlSearch('uaserials',menu+valid)[0].title,'Тестовий фільм');
-});
-test('UAFlix rejects category and wrong media type links',()=>{
-  const html='<a class="sres-wrap" href="/films/action/extra/">Категорія</a><a class="sres-wrap" href="/serials/test-show/"><h2>Серіал</h2></a><a class="sres-wrap" href="/films/test-film/"><h2>Фільм</h2></a>';
-  assert.deepEqual(parseHtmlSearch('uaflix',html,'movie').map(x=>x.title),['Фільм']);
 });
 test('exact catalogue title outranks unrelated article and menu',async()=>{
   const html='<a href="/films/">Фільми</a><a href="/111-other.html"><span class="th-title">Other</span></a><a href="/123-test.html"><span class="th-title">Test title</span></a>';
@@ -115,13 +111,11 @@ test('Mikai current documented nested ids and titles schema',()=>{
  assert.equal(rows[0].id,'21');assert.equal(rows[0].title,'Аніме');assert.equal(rows[0].original,'Anime');
 });
 
-test('UAKino.best catalogue search uses its own origin and exact title, not mirror ID',async()=>{
- const html='<a class="movie-title" href="/filmy/9-example.html">Sample (2008)</a><a class="movie-title" href="/filmy/99-unrelated.html">Unrelated (2008)</a><a class="movie-title" href="/filmy/88-remake.html">Sample (2024)</a><a class="movie-title" href="https://uakino.eu/filmy/66-example.html">Sample (2008)</a>';
- await withMockFetch(async url=>{
-  assert.equal(new URL(url).origin,'https://uakino.best');return new Response(html);
- },async()=>{
-  const reply=await handleIntegration(req('/api/providers/search?provider=uakino-best&q=Sample&type=movie&year=2008'),{});
-  assert.equal(reply.status,200);
-  assert.deepEqual((await reply.json()).results.map(x=>x.id),['https://uakino.best/filmy/9-example.html']);
+
+test('removed providers are rejected for both search and media API',async()=>{
+ await withMockFetch(async()=>{throw Error('unexpected network request')},async()=>{
+  for(const id of ['uaflix','uakino','uakino-best'])for(const route of ['search?q=Test','media?id=123']){
+   assert.equal((await handleIntegration(req('/api/providers/'+route+'&provider='+id),{})).status,400);
+  }
  });
 });

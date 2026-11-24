@@ -7,7 +7,7 @@ test('decode HTML entities and escaped JS URLs',()=>{
 });
 test('parse real-style source page with video link and episode labels',()=>{
   const html=`<ul><li data-file="https://video.example.org/season2-ep3.m3u8?sig=ok&amp;key=1" data-voice="Українська">Сезон 2 Серія 3</li></ul><iframe src="//ashdi.vip/embed/123"></iframe>`;
-  const out=parseMediaDocument(html,'https://uafix.net/show/23');
+  const out=parseMediaDocument(html,'https://klonua.com/show/23');
   assert.equal(out.streams.length,1);
   assert.equal(out.episodes[0].season,2);
   assert.equal(out.episodes[0].episode,3);
@@ -15,7 +15,7 @@ test('parse real-style source page with video link and episode labels',()=>{
   assert.deepEqual(out.embeds,['https://ashdi.vip/embed/123']);
 });
 test('never follow arbitrary host through an iframe',()=>{
-  const out=parseMediaDocument('<iframe src="https://127.0.0.1/admin"></iframe><iframe src="https://evil.example/bad"></iframe>','https://uafix.net/x');
+  const out=parseMediaDocument('<iframe src="https://127.0.0.1/admin"></iframe><iframe src="https://evil.example/bad"></iframe>','https://klonua.com/x');
   assert.equal(out.embeds.length,0);
 });
 test('read media URLs from nested structured provider response',()=>{
@@ -23,41 +23,41 @@ test('read media URLs from nested structured provider response',()=>{
   assert.equal(out.streams.length,1);
   assert.equal(out.episodes[0].episode,7);
 });
-test('resolve UAKino page through an explicitly allowlisted iframe',async()=>{
+test('resolve Eneyida page through an explicitly allowlisted iframe',async()=>{
   const visited=[];
   const fetcher=async (url,options)=>{
     visited.push(new URL(url).hostname);
-    if(url==='https://uakino.eu/ua/test-film')return new Response('<iframe src="https://ashdi.vip/embed/xyz"></iframe>',{status:200});
+    if(url==='https://eneyida.tv/ua/test-film')return new Response('<iframe src="https://ashdi.vip/embed/xyz"></iframe>',{status:200});
     if(url==='https://ashdi.vip/embed/xyz')return new Response('var file="https://stream.example.net/master.m3u8?tk=xyz";',{status:200});
     throw Error('Unexpected external request '+url);
   };
-  const response=await resolveProviderMedia('uakino','https://uakino.eu/ua/test-film',fetcher);
+  const response=await resolveProviderMedia('eneyida','https://eneyida.tv/ua/test-film',fetcher);
   assert.equal(response.streams[0].type,'hls');
-  assert.deepEqual(visited,['uakino.eu','ashdi.vip']);
+  assert.deepEqual(visited,['eneyida.tv','ashdi.vip']);
 });
 test('strict media page origin prevents arbitrary backend fetch',async()=>{
-  await assert.rejects(resolveProviderMedia('uaflix','https://localhost/admin',async()=>{throw Error('fetch should not run')}),/Некоректна адреса/);
+  await assert.rejects(resolveProviderMedia('uafilm','https://localhost/admin',async()=>{throw Error('fetch should not run')}),/Некоректна адреса/);
   await assert.rejects(resolveProviderMedia('uafilm','https://klonua.com.evil.example/a',async()=>{throw Error('fetch should not run')}),/Некоректна адреса/);
 });
 test('same-origin provider redirect',async()=>{
   const seen=[];
-  const out=await providerRequest('https://uafix.net/a',{},async url=>{
+  const out=await providerRequest('https://klonua.com/a',{},async url=>{
     seen.push(url);return url.endsWith('/a')?new Response(null,{status:302,headers:{location:'/b'}}):new Response('ok');
   });
-  assert.equal(out.text,'ok');assert.equal(out.url,'https://uafix.net/b');assert.equal(seen.length,2);
+  assert.equal(out.text,'ok');assert.equal(out.url,'https://klonua.com/b');assert.equal(seen.length,2);
 });
 test('transient GET retry',async()=>{
   let n=0;
-  assert.equal((await providerRequest('https://uafix.net/a',{},async()=>++n===1?new Response('',{status:503}):new Response('ok'))).text,'ok');assert.equal(n,2);
+  assert.equal((await providerRequest('https://klonua.com/a',{},async()=>++n===1?new Response('',{status:503}):new Response('ok'))).text,'ok');assert.equal(n,2);
 });
 test('403 is never retried or rerouted',async()=>{
-  let n=0;await assert.rejects(providerRequest('https://uafix.net/a',{},async()=>{n++;return new Response('',{status:403});}),e=>e.upstreamStatus===403&&e.status===502);assert.equal(n,1);
+  let n=0;await assert.rejects(providerRequest('https://klonua.com/a',{},async()=>{n++;return new Response('',{status:403});}),e=>e.upstreamStatus===403&&e.status===502);assert.equal(n,1);
 });
 test('cross-origin redirect is rejected',async()=>{
-  let n=0;await assert.rejects(providerRequest('https://uafix.net/a',{},async()=>{n++;return new Response(null,{status:302,headers:{location:'https://evil.example/a'}});}),/непідтримувану/);assert.equal(n,1);
+  let n=0;await assert.rejects(providerRequest('https://klonua.com/a',{},async()=>{n++;return new Response(null,{status:302,headers:{location:'https://evil.example/a'}});}),/непідтримувану/);assert.equal(n,1);
 });
 test('embedded 403 is reported',async()=>{
-  const out=await resolveProviderMedia('uaflix','https://uafix.net/a',async url=>url.includes('uafix.net')?new Response('<iframe src="https://ashdi.vip/example"></iframe>'):new Response('',{status:403}));
+  const out=await resolveProviderMedia('uafilm','https://klonua.com/a',async url=>url.includes('klonua.com')?new Response('<iframe src="https://ashdi.vip/example"></iframe>'):new Response('',{status:403}));
   assert.equal(out.streams.length,0);assert.equal(out.warnings[0].status,403);
 });
 
@@ -72,7 +72,7 @@ test('empty video document has explicit media status',async()=>{
 
 test('explicit login requirement is reported without further requests',async()=>{
   let calls=0;
-  const out=await resolveProviderMedia('uaflix','https://uafix.net/films/test/',async()=>{calls++;return new Response('<p>Пройдіть авторизацію</p><iframe src="https://ashdi.vip/example"></iframe>');});
+  const out=await resolveProviderMedia('uafilm','https://klonua.com/films/test/',async()=>{calls++;return new Response('<p>Пройдіть авторизацію</p><iframe src="https://ashdi.vip/example"></iframe>');});
   assert.equal(out.mediaStatus,'access_denied');assert.equal(out.streams.length,0);assert.equal(calls,1);
 });
 test('removed content gets distinct availability status',async()=>{
@@ -112,65 +112,11 @@ test('AnimeON rejects unconfigured frame origin and opaque file',()=>{
  assert.equal(out.streams.length,0);assert.equal(out.playerEmbeds.length,0);
 });
 
-test('UAKino loads separate same-origin public playlist for a catalogue article',async()=>{
-  const calls=[];
-  const result=await resolveProviderMedia('uakino','https://uakino.eu/films/123-sample.html',async url=>{
-    calls.push(url);
-    if(url.includes('playlists.php'))return Response.json({response:'<li data-file="https://ashdi.vip/embed/sample" data-voice="Studio">Сезон 1 Серія 2</li>'});
-    if(url.includes('ashdi.vip'))return new Response('<html>Public player</html>');
-    return new Response('<html>Article</html>');
-  });
-  assert.equal(calls[1],'https://uakino.eu/engine/ajax/playlists.php?news_id=123&xfield=playlist');
-  assert.equal(result.playerEmbeds[0].episode,2);
-  assert.equal(result.playerEmbeds[0].season,1);
-  assert.equal(result.mediaStatus,'available');
-});
-test('UAKino playlist access denial does not trigger requests to alternate origins',async()=>{
- const calls=[];
- const result=await resolveProviderMedia('uakino','https://uakino.eu/films/123-sample.html',async url=>{
-   calls.push(url);
-   return url.includes('playlists.php')?new Response('',{status:403}):new Response('<html>Article</html>');
- });
- assert.equal(calls.length,2);assert.equal(result.mediaStatus,'access_denied');assert.deepEqual(result.playerEmbeds,[]);
-});
-test('UAKino playlist honors player framing headers',async()=>{
- const result=await resolveProviderMedia('uakino','https://uakino.eu/films/123-sample.html',async url=>{
-  if(url.includes('playlists.php'))return Response.json({response:'<li data-file="https://ashdi.vip/embed/sample">Film</li>'});
-  if(url.includes('ashdi.vip'))return new Response('Player',{headers:{'X-Frame-Options':'DENY'}});
-  return new Response('Article');
- });
- assert.deepEqual(result.playerEmbeds,[]);
-});
 
-test('UAKino diagnostic distinguishes denied playlist from denied player',async()=>{
- const article='https://uakino.eu/films/123-sample.html';
- const playlistDenied=await resolveProviderMedia('uakino',article,async url=>url.includes('playlists.php')?new Response('',{status:403}):new Response('Article'));
- assert.equal(playlistDenied.warnings[0].stage,'playlist');
- assert.equal(playlistDenied.warnings[0].host,'uakino.eu');
- assert.equal(playlistDenied.warnings[0].status,403);
- const playerDenied=await resolveProviderMedia('uakino',article,async url=>{
-  if(url.includes('playlists.php'))return Response.json({response:'<li data-file="https://ashdi.vip/embed/sample">Film</li>'});
-  if(url.includes('ashdi.vip'))return new Response('',{status:403});
-  return new Response('Article');
- });
- assert.equal(playerDenied.warnings[0].stage,'player');
- assert.equal(playerDenied.warnings[0].host,'ashdi.vip');
- assert.equal(playerDenied.warnings[0].status,403);
- assert.deepEqual(playerDenied.playerEmbeds,[]);
-});
-
-test('UAKino.best offers only separate publicly supplied iframe player',async()=>{
- const result=await resolveProviderMedia('uakino-best','https://uakino.best/filmy/9-example.html',async url=>new Response(url.includes('uakino.best')?'<iframe src="https://ashdi.vip/embed/example"></iframe>':'Player'));
- assert.equal(result.playerEmbeds[0].url,'https://ashdi.vip/embed/example');
- assert.equal(result.streams.length,0);
-});
-test('UAKino.best never loads mirror or returns denied frame',async()=>{
- let calls=0;
- const result=await resolveProviderMedia('uakino-best','https://uakino.best/filmy/9-example.html',async url=>{
-   calls++;
-   if(url.includes('uakino.best'))return new Response('<iframe src="https://ashdi.vip/embed/example"></iframe>');
-   return new Response('',{status:403});
- });
- assert.equal(calls,2);assert.equal(result.mediaStatus,'access_denied');assert.deepEqual(result.playerEmbeds,[]);
- await assert.rejects(resolveProviderMedia('uakino-best','https://uakino.eu/filmy/9-example.html',async()=>{throw Error('unexpected request')}),/Некоректна адреса/);
+test('removed providers and hosts are rejected without external requests',async()=>{
+ for(const [id,host] of [['uaflix','uafix.net'],['uakino','uakino.eu'],['uakino-best','uakino.best']]){
+  const forbidden=async()=>{throw Error('unexpected network request')};
+  await assert.rejects(resolveProviderMedia(id,'https://'+host+'/test',forbidden),/Невідоме джерело/);
+  await assert.rejects(providerRequest('https://'+host+'/test',{},forbidden),/Некоректна адреса/);
+ }
 });

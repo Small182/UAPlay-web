@@ -1,4 +1,4 @@
-import { providerFrameUrl, playerFrameUrl, browserProbeUrl, probeBrowserAccess } from './provider-frame.js';
+import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
 const $ = selector => document.querySelector(selector);
 const content = $('#app-content');
 const modal = $('#modal-root');
@@ -37,7 +37,7 @@ const persisted = readStore();
 const state = {
   view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
   searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {},
-  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: persisted.disabledProviders || [], theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
+  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
   searchTimer:0, toastTimer:0, playerControlsTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -395,13 +395,6 @@ function paintChannels() {
       return `<div class="channel-entry"><button type="button" class="channel-card" data-channel="${index}">${logo?`<img class="channel-logo" src="${safe(logo)}" loading="lazy" alt="">`:`<div class="channel-logo" style="display:grid;place-items:center;background:#303140;color:#d7c6ff">${icon('live')}</div>`}<div style="min-width:0;flex:1"><div class="channel-name">${safe(c.name)}</div><div class="channel-group">${safe(c.group||'Прямий ефір')}</div></div>${icon('play')}</button><button class="btn secondary" data-channel-favorite="${index}" aria-label="Вибране IPTV">${state.iptvFavorites[c.url]?'★':'☆'}</button></div>`;
     }).join('')}</div>`:'<div class="empty">За вашим запитом каналів не знайдено.</div>'}`;
 }
-function uaFlixAccountCard(){
-  return `<div class="settings-card" id="uaflix-account"><h3>UAFlix — акаунт</h3>
-    <div class="status-line"><span class="status-bullet bad"></span>Акаунт не підключений до UAPlay</div>
-    <p>Вхід та реєстрація відбуваються на сайті UAFlix. UAPlay не отримує пароль або сесію сайту.</p>
-    <div class="setting-control"><a class="btn secondary" href="https://uafix.net/" target="_blank" rel="noopener noreferrer">Увійти / зареєструватися на UAFlix ↗</a></div>
-    <p class="section-note">Авторизація на сайті не переноситься автоматично у Cloudflare Worker. Для підключення акаунта потрібен підтримуваний UAFlix механізм делегованого доступу.</p></div>`;
-}
 async function renderSettings() {
   ++state.loadId;
   let configured=state.tmdbConfigured;
@@ -410,13 +403,13 @@ async function renderSettings() {
   content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div></div>
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
-    <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div>${uaFlixAccountCard()}<div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
+    <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
     <div class="settings-card"><h3>Каталог TMDB</h3><p>Статус API та доступність актуальних назв.</p>
       <div class="status-line"><span class="status-bullet ${configured?'':'bad'}"></span>${configured?'Ключ TMDB задано. Якщо каталог не відкривається, перевірте /api/catalog.':'TMDB_API_KEY або TMDB_TOKEN не задано — увімкнено демонстраційний режим'}</div></div>
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.13 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.14 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
@@ -476,7 +469,7 @@ async function loadSeason(number) {
     target.innerHTML=(data.episodes||[]).map(ep=>`<button type="button" class="episode" data-episode="${ep.number}" aria-label="Серія ${ep.number}"><span class="episode-num">${ep.number}</span><div class="episode-info"><div class="episode-title">${safe(ep.title)}</div><div class="episode-desc">${safe(ep.overview||'')}</div></div><span>›</span></button>`).join('') || '<p class="muted">Серій не знайдено.</p>';
   }catch(e){if($('#episode-list'))$('#episode-list').innerHTML=`<p class="muted">${safe(e.message)}</p>`;}
 }
-const PROVIDER_FALLBACK=[['uaflix','UAFlix'],['uaserials','UASerials'],['eneyida','Eneyida'],['uafilm','UAFilm'],['uakino','UAKino (.eu)'],['uakino-best','UAKino (.best)'],['mikai','Mikai'],['animeon','AnimeON']];
+const PROVIDER_FALLBACK=[['uaserials','UASerials'],['eneyida','Eneyida'],['uafilm','UAFilm'],['mikai','Mikai'],['animeon','AnimeON']];
 function switchScreen(title,body,back='close'){
   const backAction=back==='providers'?'data-back-providers':'data-close';
   return `<div class="modal-backdrop switch-modal-backdrop" data-close><section class="switch-screen" role="dialog" aria-modal="true" aria-label="${safe(title)}">
@@ -490,21 +483,7 @@ function showSources(item){
   modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
     <div class="source-bottom"><button class="btn secondary" data-player="${safe(keyFor(item))}">Власне пряме посилання MP4 / HLS</button></div>`);
 }
-function browserProbeButton(provider,kind,value){
-  if(!browserProbeUrl(provider,kind,value))return '';
-  return `<div class="setting-control"><button type="button" class="btn secondary" data-browser-probe="${safe(provider)}" data-probe-kind="${safe(kind)}" data-probe-value="${safe(value)}">Перевірити прямий доступ</button><span class="section-note" data-probe-result role="status" aria-live="polite"></span></div>`;
-}
-async function checkBrowserAccess(button){
-  const output=button.parentElement?.querySelector('[data-probe-result]');
-  if(!output)return;
-  button.disabled=true;output.textContent='Перевірка CORS із цього браузера…';
-  try{
-    const result=await probeBrowserAccess(button.dataset.browserProbe,button.dataset.probeKind,button.dataset.probeValue);
-    output.textContent=result.state==='readable'?`HTTP ${result.status} — браузер може читати відповідь. Це ще не підтверджує доступність відео.`:result.state==='http_error'?`HTTP ${result.status} — джерело відхилило прямий запит.`:result.state==='invalid'?'Некоректна адреса.':'Браузер не отримав доступної для читання відповіді: CORS, мережа або перенаправлення. Точну причину дивіться в Network.';
-  }finally{button.disabled=false;}
-}
 function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
-  if(provider==='uaflix')return ''; // provider's full site refused framing in browser testing
   const target=providerFrameUrl(provider,url);
   return target?`<button type="button" class="btn secondary" data-provider-frame="${safe(provider)}" data-frame-url="${safe(target)}">${safe(label)}</button>`:'';
 }
@@ -512,7 +491,7 @@ function openProviderFrame(provider,value){
   const target=providerFrameUrl(provider,value);
   if(!target){toast('Непідтримувана адреса джерела');return;}
   cleanupPlayer();state.activePlayer=null;const returnProvider=provider;state.activeProvider=returnProvider;
-  const name=provider==='uakino-best'?'UAKino.best':PROVIDER_FALLBACK.find(p=>p[0]===provider)?.[1]||provider;
+  const name=PROVIDER_FALLBACK.find(p=>p[0]===provider)?.[1]||provider;
   modal.innerHTML=switchScreen(name+' · Вебрежим',`<div class="provider-browser">
     <p class="switch-subtitle">Експериментальний режим. Сторінка завантажується безпосередньо у браузері. Якщо сайт дозволяє iframe, скористайтеся його власним пошуком, входом та плеєром.</p>
     <iframe class="provider-web-frame" src="${safe(target)}" title="${safe(name)}" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen; autoplay" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
@@ -520,10 +499,11 @@ function openProviderFrame(provider,value){
     <div class="provider-browser-actions"><button class="btn secondary" type="button" data-provider="${safe(returnProvider)}">Назад до результатів</button><a class="btn secondary" href="${safe(target)}" target="_blank" rel="noopener noreferrer">Відкрити у браузері ↗</a></div></div>`,'providers');
 }
 async function loadProvider(provider){
+  if(!PROVIDER_FALLBACK.some(([id])=>id===provider))return;
   const item=state.activeItem;if(!item)return;
   state.activeProvider=provider;
   const providerName=PROVIDER_FALLBACK.find(p=>p[0]===provider)?.[1]||provider;
-  modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>${provider==='uakino-best'?'':browserSourceButton(provider)}${browserProbeButton(provider,'search',item.title)}`, 'providers');
+  modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>${browserSourceButton(provider)}`, 'providers');
   const chosen=keyFor(item);const box=$('#source-results');
   const releaseYear=String(item.date||'').slice(0,4);
   try{
@@ -533,7 +513,7 @@ async function loadProvider(provider){
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!$('#source-results'))return;
     box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season?` · Сезон ${source.season}`:""}</span><span class="row-trailing">›</span></button>`).join(''):
       '<p class="switch-subtitle">Нічого не знайдено. Джерело може бути недоступне або змінити структуру сайту.</p>';
-  }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p>${provider==='uaflix'&&/403/.test(e.message)?'<p class="switch-subtitle">UAFlix відхилив запит сервера. Можна перевірити акаунт на сайті, але вхід там не підключає сесію до UAPlay.</p><a class="source-external" href="https://uafix.net/" target="_blank" rel="noopener noreferrer">Відкрити UAFlix ↗</a>':''}<button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
+  }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
 }
 function openEmbeddedPlayer(provider,value){
   const target=playerFrameUrl(provider,value);
@@ -559,9 +539,10 @@ function renderStreamChoices(data){
   state.playerEmbeds=frames.map(p=>p.url);
   const frameList=frames.map((p,i)=>`<button class="switch-row" type="button" data-embed-provider="${safe(source.provider)}" data-embed-url="${safe(p.url)}"><span class="row-index">${choices.length+i+1}.</span><span>${safe(p.label||'Вбудований плеєр')} · Web</span><span class="row-trailing">▶</span></button>`).join('');
   const fallback=source.url?`<a class="source-external" href="${safe(source.url)}" rel="noopener noreferrer" target="_blank">Відкрити сторінку джерела ↗</a>`:'';
-  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${(list+frameList)||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&!frames.length&&data.warnings?.length?(source.provider==='uakino'?data.warnings.map(w=>`<p class="switch-subtitle">${w.stage?`${safe(w.stage==='playlist'?'Запит плейлиста':'Запит плеєра')} · ${safe(w.host||'')} · `:''}${safe(w.message)}</p>`).join(''):`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`):''}${source.provider==='mikai'?'<p class="section-note">Дані та озвучення: <a href="https://mikai.me/" target="_blank" rel="noopener noreferrer">Mikai ↗</a></p>':''}${browserSourceButton(source.provider,source.url,source.provider==='uakino-best'?'Відкрити всю сторінку джерела':'Відкрити сторінку з плеєром у UAPlay')}${source.provider==='uakino'&&!choices.length&&!frames.length?browserProbeButton('uakino','playlist',source.url):''}${fallback}`, 'providers');
+  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${(list+frameList)||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&!frames.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${source.provider==='mikai'?'<p class="section-note">Дані та озвучення: <a href="https://mikai.me/" target="_blank" rel="noopener noreferrer">Mikai ↗</a></p>':''}${browserSourceButton(source.provider,source.url,'Відкрити сторінку з плеєром у UAPlay')}${fallback}`, 'providers');
 }
 async function playProviderMedia(provider,id){
+  if(!PROVIDER_FALLBACK.some(([key])=>key===provider))return;
   const item=state.activeItem;if(!item)return;
   state.playerEmbeds=[];
   state.activeSource={provider,id,url:!['mikai','animeon'].includes(provider)?id:''};
@@ -571,16 +552,12 @@ async function playProviderMedia(provider,id){
     const data=await api(`/api/providers/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(id)}`);
     if(keyFor(state.activeItem)!==chosen||!state.activeSource||state.activeSource.id!==id)return;
     const streams=data.streams||[];
-    if(provider==='uakino-best'&&item.type!=='tv'&&data.playerEmbeds?.length===1){
-      const target=playerFrameUrl(provider,data.playerEmbeds[0].url);
-      if(target){state.playerEmbeds=[target];openEmbeddedPlayer(provider,target);return;}
-    }
     if(streams.length===1 && (!item.type || item.type!=='tv') && !(data.episodes?.length>1) && !data.playerEmbeds?.length) {
       openPlayer(item,streams[0].url);return;
     }
     renderStreamChoices(data);
   }catch(e){
-    if($('#modal-root .switch-screen')&&state.activeSource?.id===id&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,provider==='uakino-best'?'Відкрити всю сторінку джерела':'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
+    if($('#modal-root .switch-screen')&&state.activeSource?.id===id&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
   }
 }
 
@@ -740,7 +717,6 @@ document.addEventListener('click',async event=>{
   if(action.dataset.sources){const key=action.dataset.sources;const item=state.lists[key]||state.activeItem;if(item)showSources(item);return;}
   if(action.dataset.provider){loadProvider(action.dataset.provider);return;}
   if(action.hasAttribute('data-back-providers')){showSources(state.activeItem);return;}
-  if(action.dataset.browserProbe){await checkBrowserAccess(action);return;}
   if(action.dataset.embedProvider){openEmbeddedPlayer(action.dataset.embedProvider,action.dataset.embedUrl);return;}
   if(action.dataset.providerFrame){openProviderFrame(action.dataset.providerFrame,action.dataset.frameUrl);return;}
   if(action.dataset.mediaProvider){playProviderMedia(action.dataset.mediaProvider,action.dataset.mediaId);return;}

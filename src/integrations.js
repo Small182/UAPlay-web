@@ -3,12 +3,9 @@ import { resolveProviderMedia, providerRequest } from './media.js';
 // External services may alter their API, block Workers, or require rights/authorization.
 // Never proxy arbitrary URLs or bypass authentication/DRM.
 const PROVIDERS = Object.freeze({
-  uaflix: { name: 'UAFlix', host: 'https://uafix.net', type: 'html-get' },
   uaserials: { name: 'UASerials', host: 'https://uaserials.my', type: 'html-get' },
   eneyida: { name: 'Eneyida', host: 'https://eneyida.tv', type: 'html-post' },
   uafilm: { name: 'UAFilm', host: 'https://klonua.com', type: 'html-post' },
-  uakino: { name: 'UAKino (.eu)', host: 'https://uakino.eu', type: 'html-get' },
-  'uakino-best': { name: 'UAKino (.best)', host: 'https://uakino.best', type: 'html-get' },
   mikai: { name: 'Mikai', host: 'https://api.mikai.me', type: 'json' },
   animeon: { name: 'AnimeON', host: 'https://animeon.club', type: 'json' }
 });
@@ -53,20 +50,14 @@ function articleLink(provider,value,type=''){
   try{url=new URL(value.replace(/&amp;/gi,'&'),conf.host);}catch{return null;}
   if(url.origin!==conf.host||url.username||url.password||url.search||url.hash)return null;
   const path=url.pathname;
-  if(provider==='uaflix'){
-    const match=path.match(/^\/(films|serials|anime)\/[a-z0-9-]+\/$/i);
-    if(!match)return null;
-    if(type==='movie'&&match[1]!=='films'||type==='tv'&&match[1]==='films')return null;
-  }else if(provider==='uaserials'){
+  if(provider==='uaserials'){
     if(!/^\/\d+-[^/]+\.html$/i.test(path))return null;
   }else{
     if(!/\/\d+-[^/]+\.html$/i.test(path))return null;
-    if(provider==='uakino-best'&&!/^\/(?:ua\/)?(?:filmy|seriesss|cartoon|anime|anime-series)\//i.test(path))return null;
     if(provider==='uafilm'){
       if(type==='movie'&&/\/(?:serialy|multserialy)\//i.test(path))return null;
       if(type==='tv'&&/\/(?:filmy|multfilmy)\//i.test(path))return null;
     }
-    if(['uakino','uakino-best'].includes(provider)&&type==='movie'&&/\/(?:seriesss|anime-series)\//i.test(path))return null;
   }
   return url.href;
 }
@@ -131,8 +122,6 @@ function parseHtmlSearch(provider,html,type='') {
     const piece=match[0];const opening=piece.slice(0,piece.indexOf('>')+1);
     const href=attr(opening,'href');if(!articleLink(provider,href,type))continue;
     const cls=attr(opening,'class');
-    if(provider==='uaflix'&&!/\bsres-wrap\b/.test(cls))continue;
-    if(['uakino','uakino-best'].includes(provider)&&!/\b(?:movie-title|search-result-link)\b/.test(cls))continue;
     if(provider==='eneyida'&&!/\bshort_title\b/.test(cls)&&!classLabel(piece,'short_title'))continue;
     if(provider==='uafilm'&&!/\b(?:card-link__text|card-title__block)\b/.test(cls)&&!classLabel(piece,'card-link__text|card-title__block'))continue;
     let label=piece.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1]||
@@ -178,12 +167,7 @@ async function providerSearch(params) {
     results=normalizeAnime(provider,payload);
   }else results=parseHtmlSearch(provider,body,type);
   const year=Number(params.get('year'))||0;
-  if(provider==='uakino-best'){
-    const expected=[baseCatalogueTitle(query),baseCatalogueTitle(original)].filter(Boolean);
-    results=results.filter(r=>String(r.title).split('/').some(t=>expected.includes(baseCatalogueTitle(t))))
-      .filter(r=>{const y=catalogueYear(r.title,r.url);return !year||!y||y===year;});
-  }
-  results=rankSources(results,query,original,provider==='uafilm'||provider==='uakino-best',year,type).slice(0,18);
+  results=rankSources(results,query,original,provider==='uafilm',year,type).slice(0,18);
   return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,60);
 }
 async function providerMedia(params) {
