@@ -104,6 +104,7 @@ function rankSources(results,local,original='',strict=false,year=0,type='',seaso
     if(!x.year||year<1900)return true;
     if(type==='movie')return Math.abs(x.year-year)<=1;
     if(type==='tv'){
+      if(x.item.provider==='uaserials'&&!x.season)return Math.abs(x.year-year)<=1;
       if(x.season&&x.season>1)return seasonYear>=1900?Math.abs(x.year-seasonYear)<=1:x.year>=year-1;
       if(x.season===1||season===1)return Math.abs(x.year-year)<=1;
       return x.year>=year-1&&(Math.abs(x.year-year)<=1||!seasonYear||Math.abs(x.year-seasonYear)<=1);
