@@ -83,7 +83,10 @@ async function catalogue(params, env) {
     top: ['/movie/top_rated', {}],
     ...Object.fromEntries(['28','35','18','27','878','16','10749','99'].map(g => ['genre_'+g, ['/discover/movie', {with_genres:g,sort_by:'popularity.desc',include_adult:'false'}]]))
   };
-  const [path, opts] = configs[section];
+  let [path, opts] = configs[section];
+  const sort=params.get('sort')||'popularity';
+  const sorting={newest:'desc',oldest:'asc'};
+  if(path.startsWith('/discover/')){if(sorting[sort])opts={...opts,sort_by:(path.endsWith('/tv')?'first_air_date':'primary_release_date')+'.'+sorting[sort]};else if(sort==='rating')opts={...opts,sort_by:'vote_average.desc','vote_count.gte':50};}
   const data = await tmdbRequest(path, { ...opts, page: p }, env);
   const forced = path.includes('/tv') ? 'tv' : path.includes('/movie') ? 'movie' : undefined;
   return json({ results: (data.results || []).filter(m => m.media_type !== 'person' && allowed(m)).map(m => item(m, forced)), page: p, totalPages: Math.min(500, data.total_pages || 1) }, 200, 120);

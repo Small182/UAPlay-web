@@ -104,3 +104,8 @@ test('invalid TMDB_API_KEY is rejected without leaking credential', async () => 
   assert.match(body.error,/TMDB_API_KEY/);
   assert.ok(!JSON.stringify(body).includes(invalid));
 });
+test('catalogue sort is translated to TMDB date order',async()=>{
+  const old=globalThis.fetch;let requested;
+  globalThis.fetch=async url=>{requested=new URL(url);return new Response(JSON.stringify({results:[],total_pages:1}));};
+  try{const response=await handleApi(new Request('https://uaplay.test/api/catalog?section=series&sort=newest'),{TMDB_API_KEY:'0123456789abcdef0123456789abcdef'});assert.equal(response.status,200);assert.equal(requested.searchParams.get('sort_by'),'first_air_date.desc');}finally{globalThis.fetch=old;}
+});

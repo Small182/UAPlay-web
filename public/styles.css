@@ -122,3 +122,9 @@ main{padding-bottom:14px}
 .player-frame.controls-hidden .switch-player-panel button,
 .player-frame.controls-hidden .switch-player-panel input{pointer-events:none}
 @media(max-width:760px){main{padding-bottom:12px}.tmdb-legal{font-size:10px}}
+.library-tabs{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0 18px}.offline-row{gap:10px;flex-wrap:wrap;margin:8px 0;padding:12px;background:var(--panel);border-radius:10px}.offline-row span{flex:1;overflow-wrap:anywhere}.player-options{display:flex;flex-wrap:wrap;gap:12px;padding:12px}.player-options label{display:flex;align-items:center;gap:7px;color:#e6edf2;font-size:14px}.player-options select{max-width:160px}.player-options input[type=range]{width:90px}
+:root[data-theme=light]{color-scheme:light;--bg:#e8edf0;--panel:#f8fafb;--panel2:#e3e9ec;--line:#c0cbd2;--text:#17242e;--muted:#465965;--shadow:0 12px 40px #0002}
+:root[data-theme=light] .topbar,:root[data-theme=light] .switch-screen,:root[data-theme=light] .switch-detail-screen{background:#f5f7f9;color:#17242e}
+:root[data-theme=light] .nav-button{color:#243642}:root[data-theme=light] .nav-button.active{background:#cfdae0;color:#17242e}
+:root[data-theme=light] .home-hero,:root[data-theme=light] .switch-row,:root[data-theme=light] .switch-detail-screen .detail-layout,:root[data-theme=light] .switch-detail-screen .episode{background:#f3f6f8;color:#17242e}
+:root[data-theme=light] .switch-screen-header h1,:root[data-theme=light] .hero-title,:root[data-theme=light] .poster-title{color:#17242e}

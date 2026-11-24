@@ -36,7 +36,7 @@ const persisted = readStore();
 const state = {
   view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
   searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {},
-  accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
+  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: persisted.disabledProviders || [], theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
   searchTimer:0, toastTimer:0, playerControlsTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -45,10 +45,11 @@ const year = item => String(item.date || '').slice(0,4) || '—';
 const imageUrl = (path, size = 'w500') => /^\/[\w-]+\.(?:jpg|png|webp)$/i.test(path || '') ? `https://image.tmdb.org/t/p/${size}${path}` : '';
 const externalImageUrl = url => { try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.href : ''; } catch { return ''; } };
 const unique = values => [...new Map(values.map(item => [keyFor(item),item])).values()];
-function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, accent:state.accent, wallpaper:state.wallpaper })); } catch { toast('Не вдалося зберегти дані браузера'); } }
+function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
 function notify(message) { clearTimeout(state.toastTimer);toastBox.textContent=message;toastBox.classList.add('show');state.toastTimer=setTimeout(()=>toastBox.classList.remove('show'),3000); }
 const toast = notify;
 function applyAccent() {
+  document.documentElement.dataset.theme=state.theme;
   const options = {turquoise:['#3DD7BB','61,215,187'],cyan:['#3BADE0','59,173,224'],yellow:['#F5D100','245,209,0'],orange:['#FF6A00','255,106,0'],red:['#FF2247','255,34,71'],violet:['#6A0DAD','106,13,173'],blue:['#1490D7','20,144,215'],green:['#12B89A','18,184,154'],pink:['#F42A9A','244,42,154'],white:['#FFFFFF','255,255,255']};
   const [hex,rgb] = options[state.accent] || options.turquoise;
   document.documentElement.style.setProperty('--accent',hex);
@@ -119,7 +120,7 @@ function demoSection(section) {
 }
 async function fetchSection(section, page=1) {
   if (state.demoMode) return { results:page === 1 ? demoSection(section) : [], page, totalPages:1 };
-  try { return await api(`/api/catalog?section=${encodeURIComponent(section)}&page=${page}`); }
+  try { return await api(`/api/catalog?section=${encodeURIComponent(section)}&page=${page}&sort=${encodeURIComponent(state.sort)}`); }
   catch (error) { if (page !== 1) throw error; toast(`TMDB: ${error.message}. Показано офлайн-каталог.`); return { results:demoSection(section),page:1,totalPages:1 }; }
 }
 function posterCard(item) {
@@ -213,10 +214,11 @@ async function renderCategory(section) {
   state.page=1;state.activeCategory=section;state.categoryTotal=data.totalPages||1;state.categoryItems=data.results||[];loadVisibleItems(state.categoryItems);
   paintCategory();
 }
+function sortControl(){return '<div class="setting-control"><label for="catalog-sort">Сортування</label><select id="catalog-sort">'+[['popularity','Популярність'],['newest','Найновіші'],['oldest','Найстаріші'],['rating','Рейтинг']].map(([v,t])=>'<option value="'+v+'" '+(state.sort===v?'selected':'')+'>'+t+'</option>').join('')+'</select></div>';}
 function paintCategory() {
   const label=NAV.find(([name])=>name===state.activeCategory)?.[1]||'Каталог';
   content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>${state.categoryItems.length} записів у добірці</p></div></div>${modeBanner()}
-    ${state.categoryItems.length?posterGrid(state.categoryItems):`<div class="empty"><div class="empty-icon">◇</div><h2>Поки немає записів</h2><p>Підключіть TMDB, щоб побачити повний каталог.</p></div>`}
+    ${sortControl()}${state.categoryItems.length?posterGrid(state.categoryItems):`<div class="empty"><div class="empty-icon">◇</div><h2>Поки немає записів</h2><p>Підключіть TMDB, щоб побачити повний каталог.</p></div>`}
     ${state.page<state.categoryTotal?'<button class="load-more" data-more>Завантажити ще</button>':''}${legalNotice()}`;
 }
 async function loadMore() {
@@ -247,12 +249,66 @@ async function performSearch() {
   loadVisibleItems(results);
   target.innerHTML=results.length?`<div class="section-row"><h2 class="section-title">Результати (${results.length})</h2></div>${posterGrid(results)}`:'<div class="empty"><h2>Нічого не знайдено</h2><p>Спробуйте іншу назву.</p></div>';
 }
-function renderFavorites() {
-  ++state.loadId;
-  const items=Object.values(state.favorites);
+function episodeKey(item,season=state.selectedSeason,episode=state.selectedEpisode){
+  return keyFor(item)+':'+season+':'+episode;
+}
+function rememberPlayback(item,seconds,finished=false){
+  if(!item||!['movie','tv'].includes(item.type))return;
+  const key=keyFor(item);
+  state.history[key]={...item,watchedAt:Date.now(),completed:finished};
+  if(item.type==='tv'){
+    const s=state.activePlayer?.season||state.selectedSeason,e=state.activePlayer?.episode||state.selectedEpisode;
+    const ek=episodeKey(item,s,e);
+    if(finished)delete state.episodeProgress[ek];else state.episodeProgress[ek]=seconds;
+    state.lastEpisode[key]={season:s,episode:e};
+  }else if(finished)delete state.progress[key];else state.progress[key]=seconds;
+  save();
+}
+function libraryDB(){
+  return new Promise((resolve,reject)=>{
+    if(!globalThis.indexedDB){reject(Error('Локальне сховище недоступне'));return;}
+    const request=indexedDB.open('uaplay-offline',1);
+    request.onupgradeneeded=()=>request.result.createObjectStore('videos',{keyPath:'id'});
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });
+}
+async function offlineOperation(mode,method,value){
+  const db=await libraryDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction('videos',mode);const store=tx.objectStore('videos');
+    const r=value===undefined?store[method]():store[method](value);
+    tx.oncomplete=()=>{db.close();resolve(r.result);};
+    tx.onabort=tx.onerror=()=>{db.close();reject(tx.error||r.error);};
+  });
+}
+async function importOffline(file){
+  if(!file)return;
+  if(!file.type.startsWith('video/')&&!/\.(mp4|m4v|mov|webm|ogv)$/i.test(file.name)){toast('Оберіть підтримуваний відеофайл');return;}
+  try{
+    try{await navigator.storage?.persist?.();}catch{}
+    await offlineOperation('readwrite','put',{id:crypto.randomUUID(),name:file.name,size:file.size,blob:file,added:Date.now()});
+    toast('Відео збережено для офлайн-перегляду');state.libraryTab='offline';await renderFavorites();
+  }catch(e){toast('Не вдалося зберегти файл: '+(e?.message||'ліміт сховища'));}
+}
+async function renderFavorites(){
+  ++state.loadId;const id=state.loadId;
+  const tabs=[['saved','На майбутнє'],['all','Вибране'],['history','Історія'],['offline','Завантажені']];
+  const tab=state.libraryTab||'saved';
+  const nav='<div class="library-tabs">'+tabs.map(([v,t])=>'<button class="btn '+(v===tab?'primary':'secondary')+'" data-library-tab="'+v+'">'+t+'</button>').join('')+'</div>';
+  if(tab==='offline'){
+    content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+'<div class="settings-card"><p>Імпортуйте власні відеофайли для перегляду без інтернету. Браузер може очищати локальне сховище.</p><input id="offline-import" type="file" accept="video/*,.mp4,.m4v,.mov,.webm"></div><div id="offline-list">Завантаження…</div>';
+    const target=$('#offline-list');
+    try{
+      const rows=await offlineOperation('readonly','getAll');
+      if(id!==state.loadId||!target.isConnected)return;
+      target.innerHTML=rows.length?rows.map(r=>'<div class="setting-control offline-row"><span>'+safe(r.name)+' · '+(r.size/1048576).toFixed(1)+' МБ</span><button class="btn secondary" data-offline-play="'+safe(r.id)+'">Дивитися</button><button class="btn danger" data-offline-delete="'+safe(r.id)+'">Видалити</button></div>').join(''):'<p class="muted">Немає локальних відео.</p>';
+    }catch(e){if(target.isConnected)target.textContent='Сховище недоступне: '+e.message;}
+    return;
+  }
+  const items=tab==='history'?Object.values(state.history).sort((a,b)=>b.watchedAt-a.watchedAt):Object.values(state.favorites).filter(i=>tab==='all'||!state.history[keyFor(i)]);
   loadVisibleItems(items);
-  content.innerHTML=`<div class="page-intro"><div><h1>Вибране</h1><p>Ваш особистий список перегляду · ${items.length}</p></div></div>
-    ${items.length?posterGrid(items):`<div class="empty"><div class="empty-icon">♡</div><h2>Тут поки порожньо</h2><p>Додавайте фільми та серіали кнопкою «Вибране».</p><button type="button" class="btn primary" data-view="home">До каталогу</button></div>`}${legalNotice()}`;
+  content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+(tab==='history'?'<button class="btn secondary" data-clear-history>Очистити історію</button>':'')+(items.length?posterGrid(items):'<div class="empty"><h2>Тут поки порожньо</h2></div>')+legalNotice();
 }
 async function renderIptv() {
   const id=++state.loadId;
@@ -281,20 +337,20 @@ async function renderSettings() {
   content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div></div>
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
-    <div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
+    <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
     <div class="settings-card"><h3>Каталог TMDB</h3><p>Статус API та доступність актуальних назв.</p>
       <div class="status-line"><span class="status-bullet ${configured?'':'bad'}"></span>${configured?'Ключ TMDB задано. Якщо каталог не відкривається, перевірте /api/catalog.':'TMDB_API_KEY або TMDB_TOKEN не задано — увімкнено демонстраційний режим'}</div></div>
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.4.2 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.0 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
-  if(!NAV.some(([v])=>v===view))view='home';
+  if(!NAV.some(([v])=>v===view)&&!HOME_SHELVES.some(([,v])=>v===view))view='home';
   state.view=view;state.loadId++;buildNav();modal.innerHTML='';
   if(view==='home')await renderHome();
-  else if(['movies','series','animation','anime'].includes(view))await renderCategory(view);
+  else if(['movies','series','animation','anime'].includes(view)||HOME_SHELVES.some(([,v])=>v===view))await renderCategory(view);
   else if(view==='search')await renderSearch();
   else if(view==='favorites')renderFavorites();
   else if(view==='iptv')await renderIptv();
@@ -314,7 +370,7 @@ function toggleFavorite(key) {
 async function openDetails(key) {
   const basic=state.lists[key] || state.favorites[key];
   if(!basic)return;
-  state.activeItem=basic;state.selectedSeason=1;state.selectedEpisode=1;
+  state.activeItem=basic;state.selectedSeason=state.lastEpisode[key]?.season||1;state.selectedEpisode=state.lastEpisode[key]?.episode||1;
   drawDetails(basic,true);
   if(state.demoMode)return;
   try{const data=await api(`/api/title/${basic.type}/${basic.id}`);if(!modal.querySelector('.detail-modal')||keyFor(state.activeItem)!==key)return;state.activeItem={...basic,...data};state.lists[key]=state.activeItem;drawDetails(state.activeItem,false);}
@@ -330,7 +386,7 @@ function drawDetails(item,loading=false) {
       <p class="detail-description">${safe(item.overview || 'Опис відсутній.')}</p>
       ${item.genres?.length?`<p class="section-note">${safe(item.genres.join(' · '))}</p>`:''}
       <div class="detail-buttons"><button class="btn primary" data-sources="${safe(key)}">${icon('play')} Дивитися</button>
-      <button class="btn secondary" data-favorite="${safe(key)}">${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}</button></div>
+      <button class="btn secondary" data-favorite="${safe(key)}">${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}</button><button class="btn secondary" data-mark-watched="${safe(key)}">${state.history[key]?.completed?'Переглянуто':'Позначити переглянутим'}</button></div>
       ${item.watch?.url?`<div class="detail-extra"><h3>Де дивитися легально</h3><p class="section-note">${safe((item.watch.services||[]).map(s=>s.name).join(', ')||'Перевірити доступні сервіси')}</p><a class="see-all" href="${safe(externalImageUrl(item.watch.url))}" target="_blank" rel="noopener noreferrer">Переглянути сервіси ↗</a></div>`:''}
       ${item.type==='tv'?`<div class="detail-extra"><h3>Сезони й серії</h3>${item.seasonList?.length?`<div class="setting-control"><label for="season-select">Сезон</label><select id="season-select">${item.seasonList.map(s=>`<option value="${s.number}">${safe(s.title||`Сезон ${s.number}`)} · ${s.episodes} серій</option>`).join('')}</select></div><div id="episode-list" style="margin-top:13px">Обирайте сезон, щоб переглянути серії.</div>`:`<p class="section-note">${loading?'Завантажуємо список сезонів…':'Інформація про сезони недоступна у деморежимі.'}</p>`}</div>`:''}
       ${loading?'<p class="section-note">Завантажуємо подробиці…</p>':''}
@@ -359,7 +415,7 @@ function switchScreen(title,body,back='close'){
 function showSources(item){
   cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';
   const extra=item.type==='tv'?`<p class="switch-subtitle">Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}</p>`:'';
-  modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
+  modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
     <div class="source-bottom"><button class="btn secondary" data-player="${safe(keyFor(item))}">Власне пряме посилання MP4 / HLS</button></div>`);
 }
 async function loadProvider(provider){
@@ -418,20 +474,22 @@ function setPlayerControls(visible, hideAfter=0) {
 function cleanupPlayer() {
   clearTimeout(state.playerControlsTimer);
   if(state.hls){state.hls.destroy();state.hls=null;}
+  if(state.wakeLock){state.wakeLock.release().catch(()=>{});state.wakeLock=null;}
+  if(state.objectUrl){URL.revokeObjectURL(state.objectUrl);state.objectUrl=null;}
   const video=modal.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}
 }
-function openPlayer(item, presetUrl) {
+function openPlayer(item, presetUrl, localBlob=null) {
   cleanupPlayer();
   const key=keyFor(item);
-  state.activePlayer={key,item};
+  state.activePlayer={key,item,season:state.selectedSeason,episode:state.selectedEpisode};
   const storedUrl= presetUrl || state.sources[key] || '';
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="player-modal" role="dialog" aria-modal="true" aria-label="Плеєр">
     <div class="player-top"><h2>${safe(item.title)}</h2><button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button></div>
     <div class="player-frame"><video id="video" playsinline webkit-playsinline preload="metadata" tabindex="0" aria-label="Відео: дотик або клік — показати чи сховати керування" poster="${safe(imageUrl(item.backdrop,'w1280'))}"></video>
       <div class="switch-player-panel" id="switch-player-panel"><div class="switch-player-seek"><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
       <div class="switch-player-actions"><button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд">↶</button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Плей/пауза">▶</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд">↷</button></div><button type="button" class="switch-fullscreen" data-fullscreen>⛶ Повний екран</button></div></div>
-    ${presetUrl?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
-    ${!presetUrl && item.type==='movie'?`<div class="player-form"><button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button><div id="subtitle-results"></div></div>`:''}
+    ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
+    <div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Гучність <input type="range" id="player-volume" min="0" max="1" step="0.05" value="${state.playerVolume}"></label><label>Яскравість відео <input type="range" id="player-brightness" min="0.4" max="1.4" step="0.05" value="1"></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label><label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div>
     <div class="player-help" id="player-help">${presetUrl?'Потік з джерела. Натисніть ▶, якщо Safari не дозволив автоматичний запуск.':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
     </section></div>`;
   const video=$('#video');
@@ -442,20 +500,21 @@ function openPlayer(item, presetUrl) {
     const total=$('#time-total');if(total)total.textContent=timeLabel(video.duration);
     const toggle=$('[data-toggle-play]');if(toggle)toggle.textContent=video.paused?'▶':'Ⅱ';
   }
-  video.addEventListener('loadedmetadata',updateTransport);
+  video.playbackRate=state.playerRate;try{video.volume=state.playerVolume;}catch{}
+  video.addEventListener('loadedmetadata',()=>{updateTransport();refreshMediaOptions();});
   video.addEventListener('timeupdate',updateTransport);
-  video.addEventListener('play',()=>{updateTransport();setPlayerControls(true,3000);});
+  video.addEventListener('play',async()=>{updateTransport();setPlayerControls(true,3000);try{const lock=await navigator.wakeLock?.request('screen');if(lock){if($('#video')===video&&!video.paused)state.wakeLock=lock;else lock.release().catch(()=>{});}}catch{}});
   video.addEventListener('pause',()=>{updateTransport();setPlayerControls(true);});
   video.addEventListener('click',()=>{
     const hidden=video.closest('.player-frame')?.classList.contains('controls-hidden');
     setPlayerControls(Boolean(hidden),hidden?3000:0);
   });
-  video.addEventListener('loadedmetadata' ,()=>{const seconds=state.progress[key]||0;if(seconds>10&&Number.isFinite(video.duration)&&seconds<video.duration-15)video.currentTime=seconds;});
+  video.addEventListener('loadedmetadata' ,()=>{const seconds=(item.type==='tv'?state.episodeProgress[episodeKey(item,state.activePlayer.season,state.activePlayer.episode)]:state.progress[key])||0;if(seconds>10&&Number.isFinite(video.duration)&&seconds<video.duration-15)video.currentTime=seconds;});
   let lastSave=0;
-  video.addEventListener('timeupdate',()=>{if(Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();state.progress[key]=Math.floor(video.currentTime);save();}});
-  video.addEventListener('ended',()=>{delete state.progress[key];save();});
+  video.addEventListener('timeupdate',()=>{if(Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();rememberPlayback(item,Math.floor(video.currentTime));}});
+  video.addEventListener('ended',()=>{rememberPlayback(item,0,true);});
   video.addEventListener('error',()=>{const help=$('#player-help');if(help)help.textContent='Не вдалося відтворити потік. Перевірте кодек, доступність адреси, CORS або обмеження джерела.';});
-  if(presetUrl)startPlayback(presetUrl); // Browsers may require tapping Play in their native controls.
+  if(localBlob){state.objectUrl=URL.createObjectURL(localBlob);video.src=state.objectUrl;video.play().catch(()=>{});}else if(presetUrl)startPlayback(presetUrl); // Browsers may require tapping Play in their native controls.
 }
 async function startPlayback(raw) {
   const video=$('#video');if(!video)return;
@@ -472,13 +531,39 @@ async function startPlayback(raw) {
       if(!$('#video')||$('#video')!==video)return;
       if(!Hls.isSupported())throw new Error('HLS не підтримується браузером');
       const hls=new Hls({enableWorker:true});state.hls=hls;hls.loadSource(url.href);hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED,()=>{video.play().catch(()=>{if(help)help.textContent='Натисніть Play для початку перегляду.';});});
+      hls.on(Hls.Events.MANIFEST_PARSED,()=>{refreshMediaOptions();video.play().catch(()=>{if(help)help.textContent='Натисніть Play для початку перегляду.';});});
       hls.on(Hls.Events.ERROR,(_e,data)=>{if(data.fatal&&help)help.textContent='Помилка HLS-потоку. Можливо, джерело блокує CORS або доступ.';});
       return;
     } catch(e){if(help)help.textContent='Цей браузер не підтримує потік HLS без додаткового модуля. Спробуйте Safari на iOS або MP4.';return;}
   }
   video.src=url.href;
   video.play().catch(()=>{if(help)help.textContent='Натисніть Play на відео, щоб почати відтворення.';});
+}
+function refreshMediaOptions(){
+  const v=$('#video');if(!v)return;
+  const h=state.hls;
+  const fill=(selector,rows,defaultLabel)=>{const el=$(selector);if(!el)return;const selected=el.value;el.innerHTML='<option value="-1">'+defaultLabel+'</option>'+rows.map(([i,t])=>'<option value="'+i+'">'+safe(t)+'</option>').join('');if([...el.options].some(o=>o.value===selected))el.value=selected;};
+  fill('#player-quality',(h?.levels||[]).map((x,i)=>[i,(x.height||'?')+'p']), 'Авто');
+  fill('#player-audio',Array.from(h?.audioTracks||v.audioTracks||[]).map((x,i)=>[i,x.name||x.label||x.lang||x.language||('Доріжка '+(i+1))]),'За замовчуванням');
+  fill('#player-track',Array.from(h?.subtitleTracks?.length?h.subtitleTracks:v.textTracks||[]).map((x,i)=>[i,x.name||x.label||x.lang||x.language||('Доріжка '+(i+1))]),'Вимкнено');
+}
+async function stepEpisode(delta){
+  const item=state.activePlayer?.item;
+  if(!item||item.type!=='tv')return;
+  const season=state.activePlayer.season,episode=state.activePlayer.episode,provider=state.activeProvider;
+  try{
+    const data=await api('/api/title/tv/'+item.id+'/season/'+season);
+    const numbers=(data.episodes||[]).map(e=>e.number).sort((a,b)=>a-b);
+    let next=numbers[numbers.indexOf(episode)+delta],nextSeason=season;
+    if(!next){
+      nextSeason=season+delta;if(nextSeason<1)return toast('Інших серій немає');
+      const other=await api('/api/title/tv/'+item.id+'/season/'+nextSeason);
+      const list=(other.episodes||[]).map(e=>e.number).sort((a,b)=>a-b);next=delta>0?list[0]:list.at(-1);
+    }
+    if(!next)return toast('Інших серій немає');
+    state.selectedSeason=nextSeason;state.selectedEpisode=next;showSources(item);
+    if(provider&&!state.disabledProviders.includes(provider))loadProvider(provider);
+  }catch(e){toast(e.message);}
 }
 function closeModal(){cleanupPlayer();modal.innerHTML='';state.activePlayer=null;}
 
@@ -498,6 +583,14 @@ document.addEventListener('error', event => { if (event.target instanceof HTMLIm
 document.addEventListener('click',async event=>{
   const action=event.target.closest('button, [data-close]');if(!action)return;
   if(action.matches('[data-close]')){if(event.target===action || action.matches('button'))closeModal();return;}
+  if(action.dataset.libraryTab){state.libraryTab=action.dataset.libraryTab;renderFavorites();return;}
+  if(action.hasAttribute('data-clear-history')){if(confirm('Очистити історію і прогрес, зберігши вибране?')){state.history={};state.progress={};state.episodeProgress={};state.lastEpisode={};save();renderFavorites();}return;}
+  if(action.dataset.markWatched){const item=state.lists[action.dataset.markWatched]||state.activeItem;if(item){state.history[keyFor(item)]={...item,watchedAt:Date.now(),completed:true};delete state.progress[keyFor(item)];save();drawDetails(item);}return;}
+  if(action.dataset.theme){state.theme=action.dataset.theme;applyAccent();save();renderSettings();return;}
+  if(action.dataset.providerToggle){const v=action.dataset.providerToggle;state.disabledProviders=state.disabledProviders.includes(v)?state.disabledProviders.filter(x=>x!==v):[...state.disabledProviders,v];save();renderSettings();return;}
+  if(action.dataset.offlinePlay){try{const r=await offlineOperation('readonly','get',action.dataset.offlinePlay);if(r)openPlayer({id:r.id,type:'local',title:r.name},null,r.blob);}catch(e){toast(e.message);}return;}
+  if(action.dataset.offlineDelete){if(confirm('Видалити локальне відео?'))try{await offlineOperation('readwrite','delete',action.dataset.offlineDelete);renderFavorites();}catch(e){toast(e.message);}return;}
+  if(action.dataset.episodeStep){stepEpisode(Number(action.dataset.episodeStep));return;}
   if(action.dataset.shelfStep){state.homeShelf=((state.homeShelf||0)+Number(action.dataset.shelfStep)+HOME_SHELVES.length)%HOME_SHELVES.length;await renderHome();return;}
   if(action.dataset.view){await showView(action.dataset.view);return;}
   if(action.dataset.title){openDetails(action.dataset.title);return;}
@@ -521,7 +614,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.attachSubtitle){attachSubtitle(action.dataset.attachSubtitle);return;}
   if(action.dataset.accent){state.accent=action.dataset.accent;applyAccent();save();renderSettings();return;}
   if(action.hasAttribute('data-refresh-iptv')){renderIptv();return;}
-  if(action.hasAttribute('data-clear-local')){if(confirm('Видалити все вибране, збережені потоки та прогрес перегляду?')){state.favorites={};state.progress={};state.sources={};save();renderSettings();toast('Локальні дані очищено');}return;}
+  if(action.hasAttribute('data-clear-local')){if(confirm('Видалити все вибране, збережені потоки та прогрес перегляду?')){state.favorites={};state.progress={};state.sources={};state.history={};state.episodeProgress={};state.lastEpisode={};save();renderSettings();toast('Локальні дані очищено');}return;}
 });
 document.addEventListener('pointerover',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
 document.addEventListener('focusin',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
@@ -533,6 +626,15 @@ document.addEventListener('input',event=>{
   if(event.target.id==='channel-search'){state.channelQuery=event.target.value;paintChannels();}
 });
 document.addEventListener('change',event=>{
+  const el=event.target,v=$('#video');
+  if(el.id==='catalog-sort'){state.sort=el.value;save();renderCategory(state.activeCategory);}
+  if(el.id==='offline-import')importOffline(el.files?.[0]);
+  if(el.id==='player-rate'&&v){state.playerRate=Number(el.value);v.playbackRate=state.playerRate;}
+  if(el.id==='player-volume'&&v){state.playerVolume=Number(el.value);try{v.volume=state.playerVolume;if(Math.abs(v.volume-state.playerVolume)>0.01)toast('На iPhone використовуйте системні кнопки гучності');}catch{}}
+  if(el.id==='player-brightness'&&v)v.style.filter='brightness('+Number(el.value)+')';
+  if(el.id==='player-quality'&&state.hls)state.hls.currentLevel=Number(el.value);
+  if(el.id==='player-audio'&&v){const n=Number(el.value);if(n>=0){if(state.hls)state.hls.audioTrack=n;else Array.from(v.audioTracks||[]).forEach((t,i)=>{t.enabled=i===n;});}}
+  if(el.id==='player-track'&&v){const n=Number(el.value);if(state.hls?.subtitleTracks?.length)state.hls.subtitleTrack=n;else Array.from(v.textTracks||[]).forEach((t,i)=>{t.mode=i===n?'showing':'disabled';});}
   if(event.target.id==='iptv-country'){state.iptvCountry=event.target.value;state.channelQuery='';renderIptv();}
   if(event.target.id==='season-select'){state.selectedSeason=Number(event.target.value);state.selectedEpisode=1;loadSeason(event.target.value);}
   if(event.target.id==='video-seek'){const v=$('#video');if(v&&Number.isFinite(v.duration))v.currentTime=Number(event.target.value)||0;}
