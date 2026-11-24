@@ -27,7 +27,7 @@ const ICONS = {
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">${ICONS[name] || ICONS.info}</svg>`;
 const NAV = [
   ['home','Головна','home'],['movies','Фільми','film'],['series','Серіали','tv'],
-  ['animation','Мультфільми','animation'],['anime','Аніме','anime'],
+  ['animation','Мультфільми','animation'],['cartoons','Мультсеріали','animation'],['anime','Аніме','anime'],
   ['iptv','IPTV','live'],['favorites','Вибране','heart'],['search','Пошук','search'],['settings','Налаштування','settings']
 ];
 const MOBILE_NAV = ['home','search','favorites','iptv','settings'];
@@ -116,7 +116,8 @@ function demoSection(section) {
   if (section === 'movies') return state.demo.filter(i => i.type === 'movie');
   if (section === 'series') return state.demo.filter(i => i.type === 'tv');
   if (section === 'animation') return state.demo.filter(i => i.type === 'movie' && i.genreIds?.includes(16));
-  if (section === 'anime') return state.demo.filter(i => i.genreIds?.includes(16));
+  if (section === 'cartoons') return state.demo.filter(i => i.type === 'tv' && i.genreIds?.includes(16));
+  if (section === 'anime') return state.demo.filter(i => i.type === 'tv' && i.genreIds?.includes(16) && i.originalLanguage==='ja');
   return state.demo;
 }
 async function fetchSection(section, page=1) {
@@ -147,7 +148,7 @@ function legalNotice() {
 }
 function buildNav() {
   const mainTabs=['home','series','movies','animation','iptv','favorites'];
-  $('#side-nav').innerHTML=NAV.filter(([view])=>mainTabs.includes(view)).sort((a,b)=>mainTabs.indexOf(a[0])-mainTabs.indexOf(b[0])).map(([view,label]) => `<button type="button" class="nav-button ${state.view===view||(view==='animation'&&state.view==='anime')?'active':''}" data-view="${view}">${label}</button>`).join('');
+  $('#side-nav').innerHTML=NAV.filter(([view])=>mainTabs.includes(view)).sort((a,b)=>mainTabs.indexOf(a[0])-mainTabs.indexOf(b[0])).map(([view,label]) => `<button type="button" class="nav-button ${state.view===view||(view==='animation'&&['cartoons','anime'].includes(state.view))?'active':''}" data-view="${view}">${label}</button>`).join('');
   $('#bottom-nav').innerHTML=NAV.filter(([view])=>MOBILE_NAV.includes(view)).map(([view,label,ico])=>`<button type="button" class="bottom-button ${state.view===view?'active':''}" data-view="${view}" aria-label="${label}">${icon(ico)}<span>${label}</span></button>`).join('');
   $('#page-heading').textContent=NAV.find(([name])=>name===state.view)?.[1] || 'UAPlay';
 }
@@ -156,7 +157,7 @@ function loadVisibleItems(items) {
 }
 const HOME_SHELVES = [
   ['Популярні фільми','movies'],['Популярні серіали','series'],
-  ['Популярні мультфільми','animation'],['Популярні мультсеріали','anime']
+  ['Популярні мультфільми','animation'],['Популярні мультсеріали','cartoons']
 ];
 function heroPanel(movie){
   const key=movie?keyFor(movie):'';
@@ -185,7 +186,7 @@ function updateHero(movie){
 }
 async function renderHome() {
   const id=++state.loadId;
-  const sections=['trending','movies','series','animation','anime'];
+  const sections=['trending','movies','series','animation','cartoons'];
   if (!Object.keys(state.home).length) {
     content.innerHTML='<div class="loading-bar"></div><div class="loading-bar" style="height:80px;margin-top:30px"></div>';
     const results=await Promise.all(sections.map(s=>fetchSection(s).catch(()=>({results:[]}))));
@@ -206,10 +207,14 @@ async function renderHome() {
     ${items.length?`<div class="poster-rail switch-rail" id="home-rail">${items.map(item=>posterCard(item).replace('class="poster-card"',`class="poster-card ${movie&&keyFor(item)===keyFor(movie)?'selected':''}" data-home-item="${safe(keyFor(item))}"`)).join('')}</div>`:'<div class="empty">Добірка порожня</div>'}
     ${legalNotice()}`;
 }
+function animationTabs(section){
+  if(!['animation','cartoons','anime'].includes(section))return '';
+  return `<div class="animation-tabs" role="group" aria-label="Підрозділи анімації">${[['animation','Мультфільми'],['cartoons','Мультсеріали'],['anime','Аніме']].map(([v,label])=>`<button type="button" class="btn ${section===v?'primary':'secondary'}" data-view="${v}" aria-pressed="${section===v}">${label}</button>`).join('')}</div>`;
+}
 async function renderCategory(section) {
   const id=++state.loadId;
   const label=NAV.find(([name])=>name===section)?.[1] || 'Каталог';
-  content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>Добірка UAPlay</p></div></div>${modeBanner()}<div class="loading-bar"></div>`;
+  content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>Добірка UAPlay</p></div></div>${animationTabs(section)}${modeBanner()}<div class="loading-bar"></div>`;
   const data=await fetchSection(section).catch(()=>({results:[],page:1,totalPages:1}));
   if(id!==state.loadId) return;
   state.page=1;state.activeCategory=section;state.categoryTotal=data.totalPages||1;state.categoryItems=data.results||[];loadVisibleItems(state.categoryItems);
@@ -219,7 +224,7 @@ function sortControl(){return '<div class="setting-control"><label for="catalog-
 function paintCategory() {
   const label=NAV.find(([name])=>name===state.activeCategory)?.[1]||'Каталог';
   content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>${state.categoryItems.length} записів у добірці</p></div></div>${modeBanner()}
-    ${sortControl()}${state.categoryItems.length?posterGrid(state.categoryItems):`<div class="empty"><div class="empty-icon">◇</div><h2>Поки немає записів</h2><p>Підключіть TMDB, щоб побачити повний каталог.</p></div>`}
+    ${animationTabs(state.activeCategory)}${sortControl()}${state.categoryItems.length?posterGrid(state.categoryItems):`<div class="empty"><div class="empty-icon">◇</div><h2>Поки немає записів</h2><p>Підключіть TMDB, щоб побачити повний каталог.</p></div>`}
     ${state.page<state.categoryTotal?'<button class="load-more" data-more>Завантажити ще</button>':''}${legalNotice()}`;
 }
 async function loadMore() {
@@ -411,14 +416,14 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.6 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.7 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
   if(!NAV.some(([v])=>v===view)&&!HOME_SHELVES.some(([,v])=>v===view))view='home';
   state.view=view;state.loadId++;buildNav();modal.innerHTML='';
   if(view==='home')await renderHome();
-  else if(['movies','series','animation','anime'].includes(view)||HOME_SHELVES.some(([,v])=>v===view))await renderCategory(view);
+  else if(['movies','series','animation','cartoons','anime'].includes(view)||HOME_SHELVES.some(([,v])=>v===view))await renderCategory(view);
   else if(view==='search')await renderSearch();
   else if(view==='favorites')renderFavorites();
   else if(view==='iptv')await renderIptv();
@@ -535,13 +540,13 @@ function renderStreamChoices(data){
   const episodes=Array.isArray(data.episodes)?data.episodes:[];
   const filtered=episodes.filter(s=>!s.season||s.season===state.selectedSeason).filter(s=>!s.episode||s.episode===state.selectedEpisode);
   const choices=state.activeItem?.type==='tv'&&episodes.some(s=>s.season||s.episode)?filtered:streams;
-  const emptyMessage=episodes.length&&streams.length?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
+  const emptyMessage=data.mediaStatus==='licensed'?'Mikai не надає плеєр для цього ліцензованого аніме.':(episodes.length&&streams.length)||data.playerEmbeds?.some(p=>p.episode)?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
   const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
-  const frames=(Array.isArray(data.playerEmbeds)?data.playerEmbeds:[]).map(p=>({url:playerFrameUrl(source.provider,p.url),label:p.label})).filter(p=>p.url);
+  const frames=(Array.isArray(data.playerEmbeds)?data.playerEmbeds:[]).filter(p=>state.activeItem?.type!=='tv'||((!p.season||p.season===state.selectedSeason)&&(!p.episode||p.episode===state.selectedEpisode))).map(p=>({url:playerFrameUrl(source.provider,p.url),label:p.label})).filter(p=>p.url);
   state.playerEmbeds=frames.map(p=>p.url);
   const frameList=frames.map((p,i)=>`<button class="switch-row" type="button" data-embed-provider="${safe(source.provider)}" data-embed-url="${safe(p.url)}"><span class="row-index">${choices.length+i+1}.</span><span>${safe(p.label||'Вбудований плеєр')} · Web</span><span class="row-trailing">▶</span></button>`).join('');
   const fallback=source.url?`<a class="source-external" href="${safe(source.url)}" rel="noopener noreferrer" target="_blank">Відкрити сторінку джерела ↗</a>`:'';
-  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${(list+frameList)||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&!frames.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${browserSourceButton(source.provider,source.url,'Відкрити сторінку з плеєром у UAPlay')}${fallback}`, 'providers');
+  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${(list+frameList)||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&!frames.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${source.provider==='mikai'?'<p class="section-note">Дані та озвучення: <a href="https://mikai.me/" target="_blank" rel="noopener noreferrer">Mikai ↗</a></p>':''}${browserSourceButton(source.provider,source.url,'Відкрити сторінку з плеєром у UAPlay')}${fallback}`, 'providers');
 }
 async function playProviderMedia(provider,id){
   const item=state.activeItem;if(!item)return;
@@ -553,7 +558,7 @@ async function playProviderMedia(provider,id){
     const data=await api(`/api/providers/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(id)}`);
     if(keyFor(state.activeItem)!==chosen||!state.activeSource||state.activeSource.id!==id)return;
     const streams=data.streams||[];
-    if(streams.length===1 && (!item.type || item.type!=='tv') && !(data.episodes?.length>1)) {
+    if(streams.length===1 && (!item.type || item.type!=='tv') && !(data.episodes?.length>1) && !data.playerEmbeds?.length) {
       openPlayer(item,streams[0].url);return;
     }
     renderStreamChoices(data);

@@ -7,10 +7,10 @@ export const VIDEO_PROVIDERS = Object.freeze({
 });
 const EMBED_HOSTS = new Set([
   ...Object.values(VIDEO_PROVIDERS),'uakino.best','zetvideo.net','hdvbua.pro',
-  'ashdi.vip','moonanime.net','moon.goldenkite.top','player.ashdi.vip'
+  'ashdi.vip','moonanime.net','moonanime.art','moon.goldenkite.top','player.ashdi.vip'
 ]);
 // Only explicit, publicly returned iframe URLs on configured video-player origins.
-const FRAME_PLAYER_HOSTS=new Set(['zetvideo.net','hdvbua.pro','ashdi.vip','player.ashdi.vip','moonanime.net','moon.goldenkite.top']);
+const FRAME_PLAYER_HOSTS=new Set(['zetvideo.net','hdvbua.pro','ashdi.vip','player.ashdi.vip','moonanime.net','moonanime.art','moon.goldenkite.top']);
 function publicPlayerFrames(body,base){
   const found=[];
   for(const match of String(body||'').matchAll(/<iframe\b[^>]*>/gi)){
@@ -181,6 +181,56 @@ function availabilityNotice(html){
     return {status:'removed',message:'Сторінка повідомляє, що відео недоступне або видалене.'};
   return null;
 }
+// Public Mikai release schema and plain AnimeON player metadata.
+// Do not decode hidden URLs, forward credentials or retry access denials.
+export function normalizeAnimeMedia(provider,payload){
+  const streams=[],episodes=[],playerEmbeds=[],seen=new Set();
+  const root=payload?.result??payload;
+  if(root?.licensed===true)return {streams,episodes,playerEmbeds,mediaStatus:'licensed'};
+  function add(value,ctx,embed=false){
+    if(typeof value!=='string'||seen.size>=4000)return;
+    const url=parseHttpsLink(value);
+    if(!url)return;
+    const media=validMedia(value);
+    const key=url.href+'|'+ctx.season+'|'+ctx.episode+'|'+ctx.voice;
+    if(seen.has(key))return;
+    const row={url:url.href,season:ctx.season||0,episode:ctx.episode||0,voice:ctx.voice||'',label:cappedLabel([ctx.episode?'Серія '+ctx.episode:'',ctx.voice,ctx.host].filter(Boolean).join(' · '))||'Плеєр'};
+    if(media){seen.add(key);streams.push({...media,...row});if(row.episode||row.season)episodes.push({...media,...row});}
+    else if(embed&&FRAME_PLAYER_HOSTS.has(url.hostname)){seen.add(key);playerEmbeds.push(row);}
+  }
+  if(provider==='mikai'){
+    for(const release of (Array.isArray(root?.releases)?root.releases:[])){
+      const voice=cappedLabel((Array.isArray(release.teams)?release.teams.map(t=>t?.name).filter(Boolean).join(' + '):'')||(release.teamName||'Mikai'))+(release.kind==='sub'?' · Субтитри':'');
+      for(const ep of (Array.isArray(release.episodes)?release.episodes:[])){
+        const number=Number(ep.number);if(!Number.isFinite(number)||number<=0)continue;
+        for(const src of (Array.isArray(ep.sources)?ep.sources:[]))add(src.embedUrl,{season:Number(ep.season)||0,episode:number,voice,host:src.provider},true);
+      }
+    }
+  }else{
+    let visited=0;
+    function walk(node,ctx={},depth=0){
+      if(depth>12||++visited>30000||!node)return;
+      if(Array.isArray(node)){for(const x of node)walk(x,ctx,depth+1);return;}
+      if(typeof node!=='object')return;
+      const title=typeof node.title==='string'?node.title:'';
+      const season=Number(node.season)||Number(title.match(/(?:сезон|season)\s*(\d+)/i)?.[1])||ctx.season||0;
+      const epNumber=Number(node.episode??node.episode_number??node.number)||Number(title.match(/(?:серія|episode|епізод)\s*(\d+(?:\.\d+)?)/i)?.[1])||ctx.episode||0;
+      const voice=cappedLabel(node.voice||node.translation?.name||node.name||ctx.voice||'AnimeON');
+      const next={season,episode:epNumber,voice};
+      for(const k of ['file','fileUrl','video_url','videoUrl','embedUrl','url']){
+        if(typeof node[k]==='string')add(node[k],next,k!=='fileUrl');
+      }
+      for(const k of ['players','data','result','episodes','videos','folder','translations','items','sources','playlist']){
+        if(node[k]&&typeof node[k]==='object')walk(node[k],next,depth+1);
+      }
+      if(typeof node.json==='string'&&node.json.length<=1800000){
+        try{walk(JSON.parse(node.json),next,depth+1);}catch{}
+      }else if(node.json&&typeof node.json==='object')walk(node.json,next,depth+1);
+    }
+    walk(payload);
+  }
+  return {streams,episodes,playerEmbeds,mediaStatus:streams.length||playerEmbeds.length?'available':'no_public_media'};
+}
 export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const host=VIDEO_PROVIDERS[provider];if(!host)throw Object.assign(new Error('Невідоме джерело'),{status:400});
   let page;
@@ -194,8 +244,9 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const loaded=await getResponse(page,null,fetcher);const content=loaded.text;page=loaded.url;
   if(provider==='mikai'||provider==='animeon'){
     let json;try{json=JSON.parse(content)}catch{throw Object.assign(new Error('Некоректний JSON відповіді джерела'),{status:502})}
-    const {streams,episodes}=parseStructuredMedia(json);
-    return {provider,streams,episodes,sourcePage:page};
+    if(json?.ok===false)throw Object.assign(new Error('API джерела повідомило про помилку'),{status:502});
+    const normalized=normalizeAnimeMedia(provider,json);
+    return {provider,...normalized,sourcePage:page};
   }
   const availability=availabilityNotice(content);
   if(availability?.status==='access_denied')return {provider,streams:[],episodes:[],sourcePage:page,mediaStatus:availability.status,warnings:[{status:403,message:availability.message}]};

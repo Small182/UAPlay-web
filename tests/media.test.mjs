@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseMediaDocument,parseStructuredMedia,resolveProviderMedia,decodeMarkup,providerRequest} from '../src/media.js';
+import {parseMediaDocument,parseStructuredMedia,resolveProviderMedia,decodeMarkup,providerRequest,normalizeAnimeMedia} from '../src/media.js';
 
 test('decode HTML entities and escaped JS URLs',()=>{
   assert.equal(decodeMarkup('https:\\/\\/cdn.example.org\\/a.m3u8?a=1&amp;b=2'),'https://cdn.example.org/a.m3u8?a=1&b=2');
@@ -93,4 +93,21 @@ test('player iframe restrictions remain respected',async()=>{
 test('iframe access denial is not offered as an embedded player',async()=>{
   const result=await resolveProviderMedia('uafilm','https://klonua.com/test',async url=>url.includes('klonua.com')?new Response('<iframe src="https://ashdi.vip/embed/example"></iframe>'):new Response('',{status:403}));
   assert.deepEqual(result.playerEmbeds,[]);
+});
+
+test('Mikai public API: release teams and episode embed metadata are preserved',()=>{
+ const out=normalizeAnimeMedia('mikai',{result:{licensed:false,releases:[{kind:'voice',teams:[{name:'Studio'}],episodes:[{number:7,sources:[{provider:'ashdi',embedUrl:'https://ashdi.vip/embed/sample'}]}]}]}});
+ assert.equal(out.playerEmbeds[0].episode,7);assert.equal(out.playerEmbeds[0].voice,'Studio');assert.equal(out.mediaStatus,'available');
+});
+test('Mikai licensed anime never exposes playback',()=>{
+ const out=normalizeAnimeMedia('mikai',{result:{licensed:true,releases:[{episodes:[{number:1,sources:[{embedUrl:'https://ashdi.vip/embed/sample'}]}]}]}});
+ assert.equal(out.mediaStatus,'licensed');assert.equal(out.playerEmbeds.length,0);
+});
+test('AnimeON nested plain JSON folders retain season and episode',()=>{
+ const out=normalizeAnimeMedia('animeon',{players:[{json:JSON.stringify([{title:'Сезон 2',folder:[{title:'Серія 3',file:'https://cdn.example.org/sample.mp4'}]}])}]});
+ assert.equal(out.episodes[0].season,2);assert.equal(out.episodes[0].episode,3);
+});
+test('AnimeON rejects unconfigured frame origin and opaque file',()=>{
+ const out=normalizeAnimeMedia('animeon',{players:[{json:JSON.stringify([{title:'Серія 1',file:'#2opaque'},{title:'Серія 2',videoUrl:'https://evil.example/iframe'}])}]});
+ assert.equal(out.streams.length,0);assert.equal(out.playerEmbeds.length,0);
 });

@@ -17,3 +17,9 @@ test('only configured public player origins are accepted',()=>{
   assert.equal(playerFrameUrl('uafilm','https://ashdi.vip.evil.example/'),null);
   assert.equal(playerFrameUrl('uaserials','https://ashdi.vip/embed/example'),null);
 });
+
+test('anime providers accept configured public player origin only',()=>{
+ assert.equal(playerFrameUrl('mikai','https://ashdi.vip/embed/example'),'https://ashdi.vip/embed/example');
+ assert.equal(playerFrameUrl('animeon','https://moonanime.art/iframe/example'),'https://moonanime.art/iframe/example');
+ assert.equal(playerFrameUrl('mikai','https://evil.example/'),null);
+});

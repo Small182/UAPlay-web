@@ -109,3 +109,8 @@ test('same-name movie with matching release year outranks wrong remake',async()=
     assert.equal(items.length,1);assert.equal(items[0].year,2025);
   });
 });
+
+test('Mikai current documented nested ids and titles schema',()=>{
+ const rows=normalizeAnime('mikai',{ok:true,result:[{ids:{mikai:21},titles:{ua:'Аніме',english:'Anime'}}]});
+ assert.equal(rows[0].id,'21');assert.equal(rows[0].title,'Аніме');assert.equal(rows[0].original,'Anime');
+});

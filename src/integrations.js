@@ -38,9 +38,10 @@ function normalizeAnime(provider,data){
   const source=provider==='mikai'?(Array.isArray(data.result)?data.result:Array.isArray(data.result?.data)?data.result.data:[]):
     (Array.isArray(data.results)?data.results:Array.isArray(data.data)?data.data:[]);
   return source.slice(0,20).map(e=>{
-    const id=provider==='mikai'?Number(e.mikai):Number(e.id);
-    const title=provider==='mikai'?(e.ua||e.english||e.title):(e.titleUa||e.titleEn||e.title);
-    return {id:String(id),provider,title:clean(title,185),name:PROVIDERS[provider].name};
+    const id=provider==='mikai'?Number(e.ids?.mikai??e.mikai):Number(e.id);
+    const title=provider==='mikai'?(e.titles?.ua||e.titles?.english||e.ua||e.english||e.title):(e.titleUa||e.titleEn||e.title);
+    const original=provider==='mikai'?(e.titles?.english||e.english||e.titles?.original||''):(e.titleEn||'');
+    return {id:String(id),provider,title:clean(title,185),original:clean(original,185),name:PROVIDERS[provider].name};
   }).filter(e=>digits(e.id)&&e.title);
 }
 // Match actual catalogue article URLs, not navigation or season filters.
@@ -171,6 +172,7 @@ async function providerSearch(params) {
   let results;
   if(conf.type==='json'){
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
+    if(payload?.ok===false)throw Object.assign(new Error('API джерела повідомило про помилку'),{status:502});
     results=normalizeAnime(provider,payload);
   }else results=parseHtmlSearch(provider,body,type);
   const year=Number(params.get('year'))||0;
@@ -183,7 +185,7 @@ async function providerMedia(params) {
   const id=params.get('id')||'';
   if(id.length>2048)return err('Завеликий ID');
   const data=await resolveProviderMedia(provider,id);
-  return js({...data,notice:data.streams.length?'Відтворення залежить від доступності потоку та обмежень Safari.':'Сторінка джерела не містить відкритого MP4/HLS. Перевірте відео на сайті джерела.'},200,30);
+  return js({...data,notice:(data.streams.length||data.playerEmbeds?.length)?'Відтворення залежить від доступності потоку та обмежень Safari.':'Сторінка джерела не містить відкритого MP4/HLS. Перевірте відео на сайті джерела.'},200,30);
 }
 async function wallpapers(params){
   const query=clean(params.get('q'),70);
