@@ -145,3 +145,11 @@ test('explicit access restrictions on nested player are respected',async()=>{
  const out=await resolveProviderMedia('uaserials','https://uaserials.my/1-show.html',async url=>new Response(url.includes('uaserials.my')?'<iframe src="https://ashdi.vip/embed/example"></iframe>':'<p>Пройдіть авторизацію</p><script type="application/json">{"file":"https://example.org/sample.mp4"}</script>'));
  assert.equal(out.streams.length,0);assert.equal(out.mediaStatus,'access_denied');
 });
+
+test('Switch-style public literal playlist preserves episode hierarchy',()=>{
+ const playlist=[{title:'Studio',folder:[{title:'Сезон 1',folder:[{title:'Серія 1',file:'https://example.org/one.m3u8'},{title:'Серія 3',file:'https://example.org/three.m3u8'}]}]}];
+ for(const body of ['<script>player({file:'+JSON.stringify(playlist)+'})</script>',"<script>player({file:'"+JSON.stringify(playlist)+"'})</script>"]){
+  const out=parseMediaDocument(body,'https://example.org/page');
+  assert.deepEqual(out.episodes.map(x=>[x.season,x.episode,x.voice]),[[1,1,'Studio'],[1,3,'Studio']]);
+ }
+});

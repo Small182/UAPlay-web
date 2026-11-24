@@ -434,7 +434,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.21 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.22 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
@@ -545,7 +545,8 @@ async function loadProvider(provider){
   modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>${browserSourceButton(provider)}`, 'providers');
   const chosen=keyFor(item);const box=$('#source-results');
   const releaseYear=String(item.date||'').slice(0,4);
-  const seasonParam=item.type==='tv'?'&season='+encodeURIComponent(state.selectedSeason):'';
+  const seasonYear=String(item.seasonList?.find(s=>s.number===state.selectedSeason)?.date||'').slice(0,4);
+  const seasonParam=item.type==='tv'?'&season='+encodeURIComponent(state.selectedSeason)+'&seasonYear='+encodeURIComponent(seasonYear):'';
   try{
     let data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.originalTitle||'')}&year=${encodeURIComponent(releaseYear)}${seasonParam}`);
     if(!data.results?.length && item.originalTitle&&item.originalTitle!==item.title)
@@ -575,7 +576,7 @@ function renderStreamChoices(data){
   const isTV=state.activeItem?.type==='tv';
   const matching=isTV?episodeChoices(data,{season:state.selectedSeason,episode:state.selectedEpisode,sourceSeason:source.season||0}):null;
   const choices=isTV?matching.selected:streams;
-  const unverified=matching?.unverified||[];
+  const unverified=[]; // Never present a full unlabeled list as the selected episode.
   const emptyMessage=data.mediaStatus==='licensed'?'Mikai не надає плеєр для цього ліцензованого аніме.':(episodes.length&&streams.length)||data.playerEmbeds?.some(p=>p.episode)?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
   const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const unknownList=unverified.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>Варіант ${i+1} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');

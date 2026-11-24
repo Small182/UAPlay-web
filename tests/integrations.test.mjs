@@ -132,3 +132,17 @@ test('UASerials does not pair an empty anchor with another card title',()=>{
  const html='<a href="/1-wrong.html"><img src="/x.jpg"></a><a href="/2-right.html"><span class="th-title">Sample</span></a>';
  assert.deepEqual(parseHtmlSearch('uaserials',html).map(x=>x.id),['https://uaserials.my/2-right.html']);
 });
+
+test('series first season does not match a later year-only article',async()=>{
+ const html='<a href="/9-example-2025.html">Example (2025)</a><a href="/2-example-2011.html"><span class="th-title">Example</span><span class="th-title-oname">Original example</span></a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const reply=await handleIntegration(req('/api/providers/search?provider=uaserials&type=tv&season=1&year=2011&q=Original%20example'),{});
+  assert.deepEqual((await reply.json()).results.map(x=>x.id),['https://uaserials.my/2-example-2011.html']);
+ });
+});
+test('Eneyida does not return unrelated results when no titles match',async()=>{
+ await withMockFetch(async()=>new Response('<article><a class="short_title" href="/1-unrelated.html">Unrelated</a></article>'),async()=>{
+  const reply=await handleIntegration(req('/api/providers/search?provider=eneyida&type=tv&q=Example'),{});
+  assert.deepEqual((await reply.json()).results,[]);
+ });
+});

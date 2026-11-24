@@ -105,7 +105,7 @@ async function details(type, id, env) {
   const base = item(data, type);
   const providers = data['watch/providers']?.results?.UA;
   return json({ ...base, genres: (data.genres || []).map(g => g.name),
-    seasonList: (data.seasons || []).filter(s => s.season_number >= 0).map(s => ({ number: s.season_number, title: s.name, episodes: s.episode_count })),
+    seasonList: (data.seasons || []).filter(s => s.season_number >= 0).map(s => ({ number: s.season_number, title: s.name, episodes: s.episode_count, date: s.air_date || '' })),
     watch: providers ? { url: providers.link || '', services: (providers.flatrate || providers.free || []).map(p => ({ name: p.provider_name, logo: p.logo_path })) } : null
   }, 200, 300);
 }
