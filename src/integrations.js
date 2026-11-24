@@ -167,7 +167,7 @@ async function providerSearch(params) {
     results=normalizeAnime(provider,payload);
   }else results=parseHtmlSearch(provider,body,type);
   const year=Number(params.get('year'))||0;
-  results=rankSources(results,query,original,provider==='uafilm',year,type).slice(0,18);
+  results=rankSources(results,query,original,['uafilm','uaserials'].includes(provider),year,type).slice(0,18);
   return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,60);
 }
 async function providerMedia(params) {
