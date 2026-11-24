@@ -128,3 +128,7 @@ tests/                 API тести на node:test
 ## Ліцензія
 
 Вміст цього прототипу розроблений спеціально для UAPlay Web. Дані TMDB, логотипи та постери мають власні умови використання; права на них не переходять до цього проєкту.
+
+### UAFlix account
+
+Settings includes a link to sign in on UAFlix itself. UAPlay does not collect credentials, read cross-origin session cookies, or claim that a login on the provider website authenticates Cloudflare requests. Account linking requires a provider-supported authorization API; none has been verified. HTTP 403 is not resolved by this UI.

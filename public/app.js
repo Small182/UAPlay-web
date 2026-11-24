@@ -389,6 +389,13 @@ function paintChannels() {
       return `<div class="channel-entry"><button type="button" class="channel-card" data-channel="${index}">${logo?`<img class="channel-logo" src="${safe(logo)}" loading="lazy" alt="">`:`<div class="channel-logo" style="display:grid;place-items:center;background:#303140;color:#d7c6ff">${icon('live')}</div>`}<div style="min-width:0;flex:1"><div class="channel-name">${safe(c.name)}</div><div class="channel-group">${safe(c.group||'Прямий ефір')}</div></div>${icon('play')}</button><button class="btn secondary" data-channel-favorite="${index}" aria-label="Вибране IPTV">${state.iptvFavorites[c.url]?'★':'☆'}</button></div>`;
     }).join('')}</div>`:'<div class="empty">За вашим запитом каналів не знайдено.</div>'}`;
 }
+function uaFlixAccountCard(){
+  return `<div class="settings-card" id="uaflix-account"><h3>UAFlix — акаунт</h3>
+    <div class="status-line"><span class="status-bullet bad"></span>Акаунт не підключений до UAPlay</div>
+    <p>Вхід та реєстрація відбуваються на сайті UAFlix. UAPlay не отримує пароль або сесію сайту.</p>
+    <div class="setting-control"><a class="btn secondary" href="https://uafix.net/" target="_blank" rel="noopener noreferrer">Увійти / зареєструватися на UAFlix ↗</a></div>
+    <p class="section-note">Авторизація на сайті не переноситься автоматично у Cloudflare Worker. Для підключення акаунта потрібен підтримуваний UAFlix механізм делегованого доступу.</p></div>`;
+}
 async function renderSettings() {
   ++state.loadId;
   let configured=state.tmdbConfigured;
@@ -397,13 +404,13 @@ async function renderSettings() {
   content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div></div>
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
-    <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
+    <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div>${uaFlixAccountCard()}<div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
     <div class="settings-card"><h3>Каталог TMDB</h3><p>Статус API та доступність актуальних назв.</p>
       <div class="status-line"><span class="status-bullet ${configured?'':'bad'}"></span>${configured?'Ключ TMDB задано. Якщо каталог не відкривається, перевірте /api/catalog.':'TMDB_API_KEY або TMDB_TOKEN не задано — увімкнено демонстраційний режим'}</div></div>
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.3 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.4 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
@@ -491,7 +498,7 @@ async function loadProvider(provider){
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!$('#source-results'))return;
     box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season?` · Сезон ${source.season}`:""}</span><span class="row-trailing">›</span></button>`).join(''):
       '<p class="switch-subtitle">Нічого не знайдено. Джерело може бути недоступне або змінити структуру сайту.</p>';
-  }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p>${provider==='uaflix'&&/403/.test(e.message)?'<p class="switch-subtitle">UAFresh також повідомляє про обмеження доступу UAFlix у браузері. Перевірте доступ у своєму акаунті безпосередньо на сайті.</p><a class="source-external" href="https://uafix.net/" target="_blank" rel="noopener noreferrer">Відкрити UAFlix ↗</a>':''}<button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
+  }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p>${provider==='uaflix'&&/403/.test(e.message)?'<p class="switch-subtitle">UAFlix відхилив запит сервера. Можна перевірити акаунт на сайті, але вхід там не підключає сесію до UAPlay.</p><a class="source-external" href="https://uafix.net/" target="_blank" rel="noopener noreferrer">Відкрити UAFlix ↗</a>':''}<button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
 }
 function renderStreamChoices(data){
   const source=state.activeSource;
