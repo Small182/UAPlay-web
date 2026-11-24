@@ -61,3 +61,14 @@ export async function probeBrowserAccess(provider,kind,value,fetcher=fetch){
     return result;
   }catch{return {state:'unreadable',status:0};}
 }
+
+// Map an explicitly selected catalogue article to the corresponding browser
+// navigation on the other configured origin. No server-side retries or proxy.
+export function uakinoBestArticleUrl(value){
+  if(typeof value!=='string'||!value)return null;
+  const source=providerFrameUrl('uakino',value);
+  if(!source)return null;
+  const u=new URL(source);
+  if(u.search||u.hash||!/^\/(?:[^/]+\/)*\d{1,10}-[^/]+\.html$/i.test(u.pathname))return null;
+  return providerFrameUrl('uakino-best',u.pathname);
+}

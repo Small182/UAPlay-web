@@ -23,12 +23,12 @@ jobs:
       - name: Test API
         run: npm run check
       - name: Build Cloudflare Pages drag-and-drop ZIP
-        run: npm run build:pages -- UAPlay-web-cloudflare-pages-v0.5.11.zip
+        run: npm run build:pages -- UAPlay-web-cloudflare-pages-v0.5.12.zip
       - name: Upload Cloudflare Pages ZIP
         uses: actions/upload-artifact@v4
         with:
           name: uaplay-cloudflare-pages-zip
-          path: UAPlay-web-cloudflare-pages-v0.5.11.zip
+          path: UAPlay-web-cloudflare-pages-v0.5.12.zip
       - name: Publish to Cloudflare Workers
         # Run the tests even before the Cloudflare connection has been configured.
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' }}
