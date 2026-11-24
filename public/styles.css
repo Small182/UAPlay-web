@@ -130,3 +130,6 @@ main{padding-bottom:14px}
 :root[data-theme=light] .switch-screen-header h1,:root[data-theme=light] .hero-title,:root[data-theme=light] .poster-title{color:#17242e}
 
 .channel-entry{display:flex;gap:7px;align-items:center}.channel-entry .channel-card{flex:1;min-width:0}.channel-entry>.btn{flex-shrink:0}video::cue{font-size:var(--cue-size,100%)}#download-queue .offline-row button{margin:4px 5px}.player-options input[type=file]{max-width:190px;color:#e6edf2}
+
+/* Provider-owned browser frame; its own layout and playback remain untouched. */
+.provider-browser{display:flex;flex-direction:column;gap:12px}.provider-browser .switch-subtitle{margin:0}.provider-web-frame{width:100%;height:clamp(280px,62dvh,590px);border:1px solid #34444b;border-radius:12px;background:#10151a}.provider-browser-actions{display:flex;flex-wrap:wrap;gap:10px}.provider-browser-actions .btn{min-width:0;white-space:normal;text-align:center}.provider-browser>.section-note{margin:0}

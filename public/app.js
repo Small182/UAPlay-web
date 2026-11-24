@@ -1,3 +1,4 @@
+import { providerFrameUrl } from './provider-frame.js';
 const $ = selector => document.querySelector(selector);
 const content = $('#app-content');
 const modal = $('#modal-root');
@@ -410,7 +411,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.4 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.5 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
@@ -484,11 +485,26 @@ function showSources(item){
   modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
     <div class="source-bottom"><button class="btn secondary" data-player="${safe(keyFor(item))}">Власне пряме посилання MP4 / HLS</button></div>`);
 }
+function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
+  const target=providerFrameUrl(provider,url);
+  return target?`<button type="button" class="btn secondary" data-provider-frame="${safe(provider)}" data-frame-url="${safe(target)}">${safe(label)}</button>`:'';
+}
+function openProviderFrame(provider,value){
+  const target=providerFrameUrl(provider,value);
+  if(!target){toast('Непідтримувана адреса джерела');return;}
+  cleanupPlayer();state.activePlayer=null;state.activeProvider=provider;
+  const name=PROVIDER_FALLBACK.find(p=>p[0]===provider)?.[1]||provider;
+  modal.innerHTML=switchScreen(name+' · Вебрежим',`<div class="provider-browser">
+    <p class="switch-subtitle">Експериментальний режим. Сторінка завантажується безпосередньо у браузері. Якщо сайт дозволяє iframe, скористайтеся його власним пошуком, входом та плеєром.</p>
+    <iframe class="provider-web-frame" src="${safe(target)}" title="${safe(name)}" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen; autoplay" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    <p class="section-note">UAPlay не може перевірити стан входу або відтворення всередині стороннього сайту. Якщо екран порожній, сайт може забороняти вбудовування.</p>
+    <div class="provider-browser-actions"><button class="btn secondary" type="button" data-provider="${safe(provider)}">Назад до результатів</button><a class="btn secondary" href="${safe(target)}" target="_blank" rel="noopener noreferrer">Відкрити у браузері ↗</a></div></div>`,'providers');
+}
 async function loadProvider(provider){
   const item=state.activeItem;if(!item)return;
   state.activeProvider=provider;
   const providerName=PROVIDER_FALLBACK.find(p=>p[0]===provider)?.[1]||provider;
-  modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>`, 'providers');
+  modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>${browserSourceButton(provider)}`, 'providers');
   const chosen=keyFor(item);const box=$('#source-results');
   const releaseYear=String(item.date||'').slice(0,4);
   try{
@@ -510,7 +526,7 @@ function renderStreamChoices(data){
   const emptyMessage=episodes.length&&streams.length?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
   const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const fallback=source.url?`<a class="source-external" href="${safe(source.url)}" rel="noopener noreferrer" target="_blank">Відкрити сторінку джерела ↗</a>`:'';
-  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${list||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${fallback}`, 'providers');
+  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${list||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${browserSourceButton(source.provider,source.url,'Відкрити сторінку з плеєром у UAPlay')}${fallback}`, 'providers');
 }
 async function playProviderMedia(provider,id){
   const item=state.activeItem;if(!item)return;
@@ -526,7 +542,7 @@ async function playProviderMedia(provider,id){
     }
     renderStreamChoices(data);
   }catch(e){
-    if($('#modal-root .switch-screen')&&state.activeSource?.id===id&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${state.activeSource?.url?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
+    if($('#modal-root .switch-screen')&&state.activeSource?.id===id&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
   }
 }
 
@@ -686,6 +702,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.sources){const key=action.dataset.sources;const item=state.lists[key]||state.activeItem;if(item)showSources(item);return;}
   if(action.dataset.provider){loadProvider(action.dataset.provider);return;}
   if(action.hasAttribute('data-back-providers')){showSources(state.activeItem);return;}
+  if(action.dataset.providerFrame){openProviderFrame(action.dataset.providerFrame,action.dataset.frameUrl);return;}
   if(action.dataset.mediaProvider){playProviderMedia(action.dataset.mediaProvider,action.dataset.mediaId);return;}
   if(action.dataset.streamUrl){if(state.activeItem)openPlayer(state.activeItem,action.dataset.streamUrl);return;}
   if(action.dataset.episode){state.selectedEpisode=Number(action.dataset.episode)||1;showSources(state.activeItem);return;}
