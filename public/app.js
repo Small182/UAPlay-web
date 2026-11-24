@@ -434,7 +434,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.22 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.23 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
@@ -496,17 +496,17 @@ async function loadSeason(number) {
 }
 const PROVIDER_FALLBACK=[['uaserials','UASerials'],['eneyida','Eneyida'],['uafilm','UAFilm'],['mikai','Mikai'],['animeon','AnimeON']];
 function switchScreen(title,body,back='close'){
-  const backAction=back==='providers'?'data-back-providers':'data-close';
+  const backAction=back==='providers'?'data-back-providers':back==='seasons'?'data-back-seasons':back==='episodes'?'data-back-episodes':'data-close';
   return `<div class="modal-backdrop switch-modal-backdrop" data-close><section class="switch-screen" role="dialog" aria-modal="true" aria-label="${safe(title)}">
     <header class="switch-screen-header"><button type="button" class="switch-back" ${backAction} aria-label="Назад">‹</button><h1>${safe(title)}</h1></header>
     <div class="switch-screen-body">${body}</div>
   </section></div>`;
 }
 function showSources(item){
-  cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';
-  const extra='';
+  cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';state.sourceResults=[];state.activeSource=null;
+  const extra=item.type==='tv'?`<p class="switch-subtitle">${safe(item.title)} · Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}</p><button class="btn secondary" data-back-episodes>Змінити серію</button>`:'';
   modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
-`);
+`,item.type==='tv'?'episodes':'close');
 }
 function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
   const target=providerFrameUrl(provider,url);
@@ -523,17 +523,17 @@ function openProviderFrame(provider,value){
     <p class="section-note">UAPlay не може перевірити стан входу або відтворення всередині стороннього сайту. Якщо екран порожній, сайт може забороняти вбудовування.</p>
     <div class="provider-browser-actions"><button class="btn secondary" type="button" data-provider="${safe(returnProvider)}">Назад до результатів</button><a class="btn secondary" href="${safe(target)}" target="_blank" rel="noopener noreferrer">Відкрити у браузері ↗</a></div></div>`,'providers');
 }
-async function selectSourceSeason(provider){
+async function selectSourceSeason(provider=''){
   state.activeProvider=provider;
   const item=state.activeItem;if(!item)return;
   let seasons=item.seasonList||[];
   if(!seasons.length&&!state.demoMode){try{const d=await api('/api/title/tv/'+item.id);if(state.activeItem!==item||state.activeProvider!==provider)return;Object.assign(item,d);seasons=d.seasonList||[];}catch{}}
   if(!seasons.length){toast('Список сезонів недоступний');return;}
-  modal.innerHTML=switchScreen('Оберіть сезон','<div class="switch-list-rows">'+seasons.map(x=>'<button class="switch-row" data-source-season="'+x.number+'"><span>'+safe(x.title||('Сезон '+x.number))+'</span><span>›</span></button>').join('')+'</div>','providers');
+  modal.innerHTML=switchScreen('Оберіть сезон','<div class="switch-list-rows">'+seasons.map(x=>'<button class="switch-row" data-source-season="'+x.number+'"><span>'+safe(x.title||('Сезон '+x.number))+'</span><span>›</span></button>').join('')+'</div>','close');
 }
 async function selectSourceEpisodes(provider,season){
-  state.selectedSeason=season;const item=state.activeItem;
-  modal.innerHTML=switchScreen('Оберіть серію','<div id="source-episode-list">Завантажуємо…</div>','providers');
+  state.selectedSeason=season;state.activeProvider='';const item=state.activeItem;
+  modal.innerHTML=switchScreen('Оберіть серію','<div id="source-episode-list">Завантажуємо…</div>','seasons');
   const box=$('#source-episode-list');
   try{const d=await api('/api/title/tv/'+item.id+'/season/'+season);if(!box.isConnected)return;box.innerHTML='<div class="switch-list-rows">'+(d.episodes||[]).map(e=>'<button class="switch-row" data-source-episode="'+e.number+'"><span>'+e.number+'. '+safe(e.title)+'</span><span>›</span></button>').join('')+'</div>';}catch(e){if(box.isConnected)box.textContent=e.message;}
 }
@@ -553,6 +553,7 @@ async function loadProvider(provider){
       data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.originalTitle)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.title)}&year=${encodeURIComponent(releaseYear)}${seasonParam}`);
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!box.isConnected)return;
     state.sourceResults=data.results||[];
+    if(state.sourceResults.length===1){await playProviderMedia(provider,state.sourceResults[0].id);return;}
     box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season&&!source.title.includes(String(source.season)+' сезон')?` · Сезон ${source.season}`:""}</span><span class="row-trailing">›</span></button>`).join(''):
       '<p class="switch-subtitle">Нічого не знайдено. Джерело може бути недоступне або змінити структуру сайту.</p>';
   }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
@@ -578,7 +579,7 @@ function renderStreamChoices(data){
   const choices=isTV?matching.selected:streams;
   const unverified=[]; // Never present a full unlabeled list as the selected episode.
   const emptyMessage=data.mediaStatus==='licensed'?'Mikai не надає плеєр для цього ліцензованого аніме.':(episodes.length&&streams.length)||data.playerEmbeds?.some(p=>p.episode)?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
-  const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
+  const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):(isTV?`Варіант ${i+1}${stream.voice&&stream.voice!==stream.label?' · '+stream.voice:''}`:stream.label||stream.voice||`Варіант ${i+1}`))} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const unknownList=unverified.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>Варіант ${i+1} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const frames=(isTV?matching.frames:(Array.isArray(data.playerEmbeds)?data.playerEmbeds:[])).map(p=>({url:playerFrameUrl(source.provider,p.url),label:p.label})).filter(p=>p.url);
   state.playerEmbeds=frames.map(p=>p.url);
@@ -760,11 +761,13 @@ document.addEventListener('click',async event=>{
   if(action.dataset.title){openDetails(action.dataset.title);return;}
   if(action.dataset.favorite){toggleFavorite(action.dataset.favorite);return;}
   if(action.hasAttribute('data-more')){await loadMore();return;}
-  if(action.dataset.sources){const key=action.dataset.sources;const item=state.lists[key]||state.activeItem;if(item)showSources(item);return;}
-  if(action.dataset.provider){if(state.activeItem?.type==='tv')selectSourceSeason(action.dataset.provider);else loadProvider(action.dataset.provider);return;}
+  if(action.dataset.sources){const key=action.dataset.sources;const item=state.lists[key]||state.activeItem;if(item){state.activeItem=item;if(item.type==='tv')selectSourceSeason();else showSources(item);}return;}
+  if(action.dataset.provider){loadProvider(action.dataset.provider);return;}
   if(action.dataset.sourceSeason!==undefined){selectSourceEpisodes(state.activeProvider,Number(action.dataset.sourceSeason));return;}
-  if(action.dataset.sourceEpisode){state.selectedEpisode=Number(action.dataset.sourceEpisode);loadProvider(state.activeProvider);return;}
+  if(action.dataset.sourceEpisode){state.selectedEpisode=Number(action.dataset.sourceEpisode);showSources(state.activeItem);return;}
   if(action.hasAttribute('data-back-providers')){showSources(state.activeItem);return;}
+  if(action.hasAttribute('data-back-seasons')){selectSourceSeason();return;}
+  if(action.hasAttribute('data-back-episodes')){selectSourceEpisodes('',state.selectedSeason);return;}
   if(action.dataset.embedProvider){openEmbeddedPlayer(action.dataset.embedProvider,action.dataset.embedUrl);return;}
   if(action.dataset.providerFrame){openProviderFrame(action.dataset.providerFrame,action.dataset.frameUrl);return;}
   if(action.dataset.mediaProvider){playProviderMedia(action.dataset.mediaProvider,action.dataset.mediaId);return;}

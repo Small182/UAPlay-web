@@ -134,9 +134,12 @@ function parseHtmlSearch(provider,html,type='') {
     let label=piece.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1]||
       classLabel(piece,'th-title(?!-oname)|movie-title|short_title|card-link__text|card-title__block|search-result-title')||attr(opening,'title')||'';
     if(!label&&provider==='uaserials'){
-      // Read only the current anchor, never a neighbouring card's title.
+      // Switch-style adjacent title, bounded by the next article link.
       const img=piece.match(/<img\b[^>]*>/i)?.[0]||'';
-      label=attr(img,'alt')||attr(img,'title');
+      const next=html.slice(anchors.lastIndex,anchors.lastIndex+900);
+      const boundary=[...next.matchAll(/<a\b[^>]*>/gi)].find(x=>articleLink(provider,attr(x[0],'href'),type));
+      const bounded=boundary?next.slice(0,boundary.index):next;
+      label=classLabel(bounded,'th-title(?!-oname)')||attr(img,'alt')||attr(img,'title');
     }
     if(!label)label=piece.slice(opening.length).replace(/<\/a\s*>$/i,'');
     add(href,label,classLabel(piece,'th-title-oname|original-title'));

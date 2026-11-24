@@ -146,3 +146,8 @@ test('Eneyida does not return unrelated results when no titles match',async()=>{
   assert.deepEqual((await reply.json()).results,[]);
  });
 });
+
+test('UASerials accepts the Switch-style adjacent title in the same card',()=>{
+ const html='<a href="/1-sample-2011.html"><img src="/poster.jpg"></a><div class="th-title">Sample</div><a href="/2-other.html"><span class="th-title">Other</span></a>';
+ assert.deepEqual(parseHtmlSearch('uaserials',html).map(x=>[x.id,x.title]),[['https://uaserials.my/1-sample-2011.html','Sample'],['https://uaserials.my/2-other.html','Other']]);
+});
