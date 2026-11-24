@@ -53,3 +53,11 @@ test('browser probe distinguishes readable response from unknown network/CORS fa
  assert.deepEqual(await probeBrowserAccess('uakino','search','Test',async()=>new Response('ok')),{state:'readable',status:200});
  assert.deepEqual(await probeBrowserAccess('uakino','search','Test',async()=>{throw new TypeError('Failed to fetch')}),{state:'unreadable',status:0});
 });
+
+test('UAKino.best explicit page mode stays on its own origin',()=>{
+ assert.equal(providerFrameUrl('uakino-best'),'https://uakino.best/ua/');
+ assert.equal(providerFrameUrl('uakino-best','https://uakino.eu/films/123-sample.html'),null);
+ assert.equal(providerFrameUrl('uakino-best','https://uakino.best.evil.example/'),null);
+ assert.equal(providerFrameUrl('uakino-best','http://uakino.best/'),null);
+ assert.equal(browserProbeUrl('uakino-best','search','Test'),null);
+});

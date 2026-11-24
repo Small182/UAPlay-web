@@ -2,13 +2,14 @@
 const FRAME_ORIGINS=Object.freeze({
   uaflix:'https://uafix.net',
   uafilm:'https://klonua.com',
-  uakino:'https://uakino.eu'
+  uakino:'https://uakino.eu',
+  'uakino-best':'https://uakino.best'
 });
 export function providerFrameUrl(provider,value=''){
   const origin=Object.hasOwn(FRAME_ORIGINS,provider)?FRAME_ORIGINS[provider]:null;
   if(!origin)return null;
   try{
-    const u=new URL(value||'/',origin);
+    const u=new URL(value||(provider==='uakino-best'?'/ua/':'/'),origin);
     if(u.origin!==origin||u.username||u.password||u.protocol!=='https:')return null;
     return u.href;
   }catch{return null;}
