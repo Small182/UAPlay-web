@@ -9,6 +9,30 @@ const EMBED_HOSTS = new Set([
   ...Object.values(VIDEO_PROVIDERS),'uakino.best','zetvideo.net','hdvbua.pro',
   'ashdi.vip','moonanime.net','moon.goldenkite.top','player.ashdi.vip'
 ]);
+// Only explicit, publicly returned iframe URLs on configured video-player origins.
+const FRAME_PLAYER_HOSTS=new Set(['zetvideo.net','hdvbua.pro','ashdi.vip','player.ashdi.vip','moonanime.net','moon.goldenkite.top']);
+function publicPlayerFrames(body,base){
+  const found=[];
+  for(const match of String(body||'').matchAll(/<iframe\b[^>]*>/gi)){
+    const tag=match[0];
+    if(/\s+srcdoc\s*=/i.test(tag))continue;
+    const attr=name=>tag.match(new RegExp('\\s+'+name+'\\s*=\\s*(["\\x27])(.*?)\\1','i'))?.[2];
+    const url=parseHttpsLink(attr('src')||attr('data-src'),base,true);
+    if(url&&FRAME_PLAYER_HOSTS.has(url.hostname)&&!validMedia(url.href,base)&&!found.includes(url.href))found.push(url.href);
+  }
+  return found.slice(0,6);
+}
+// Respect explicit restrictions; the browser remains the final authority.
+function frameHeadersPermit(headers){
+  if(!headers)return false;
+  if(headers.get('x-frame-options')?.trim())return false;
+  const csp=headers.get('content-security-policy')||'';
+  for(const policy of csp.split(',')){
+    const rule=policy.split(';').map(x=>x.trim()).find(x=>/^frame-ancestors(?:\s|$)/i.test(x));
+    if(rule&&!rule.split(/\s+/).slice(1).some(x=>x==='*'||x==='https:'))return false;
+  }
+  return true;
+}
 const EXT = /\.(m3u8|mp4)(?:$|[?#])/i;
 const DECODABLE = /&(amp|quot|apos|lt|gt|#(?:38|34|39|60|62));/gi;
 const ENTITIES = {amp:'&',quot:'"',apos:"'",lt:'<',gt:'>', '#38':'&','#34':'"','#39':"'",'#60':'<','#62':'>'};
@@ -139,7 +163,7 @@ export async function providerRequest(input,options={},fetcher=fetch){
     if(Number(response.headers.get('content-length'))>1800000)throw failure('Завелика відповідь джерела',502);
     const text=await response.text();
     if(text.length>1800000)throw failure('Завелика відповідь джерела',502);
-    return {text,url:url.href};
+    return {text,url:url.href,headers:response.headers};
   }
 }
 async function getResponse(url,referrer,fetcher){
@@ -176,14 +200,18 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const availability=availabilityNotice(content);
   if(availability?.status==='access_denied')return {provider,streams:[],episodes:[],sourcePage:page,mediaStatus:availability.status,warnings:[{status:403,message:availability.message}]};
   const start=parseMediaDocument(content,page);
-  const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[],embedCount:start.embeds.length};
-  const pending=start.embeds.map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
+  const frameCandidates= ['uafilm','uaflix'].includes(provider)&&!availability?publicPlayerFrames(content,page):[];
+  const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[],embedCount:start.embeds.length,playerEmbeds:[]};
+  const pending=[...new Set([...start.embeds,...frameCandidates])].map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
   // Follow at most five explicit iframe links and two levels, never arbitrary URLs.
   while(pending.length && visited.size<6){
     const next=pending.shift();if(!next||visited.has(next.url))continue;visited.add(next.url);
     try{
       const html=await getResponse(next.url,next.from,fetcher);
       const parsed=parseMediaDocument(html.text,html.url);
+      if(frameCandidates.includes(next.url)&&FRAME_PLAYER_HOSTS.has(new URL(html.url).hostname)&&!availabilityNotice(html.text)&&frameHeadersPermit(html.headers)){
+        result.playerEmbeds.push({url:html.url,label:'Вбудований плеєр '+(result.playerEmbeds.length+1)});
+      }
       result.streams.push(...parsed.streams);result.episodes.push(...parsed.episodes);
       if(next.depth<2)pending.push(...parsed.embeds.map(url=>({url,depth:next.depth+1,from:next.url})));
     }catch(e){if(result.warnings.length<5)result.warnings.push({status:e.upstreamStatus||0,message:e.message});}
@@ -192,6 +220,7 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   result.streams=uniqueItems(result.streams).slice(0,50);
   result.episodes=uniqueItems(result.episodes).slice(0,80);
   result.mediaStatus=result.streams.length?'available':result.warnings.some(w=>[401,403,451].includes(w.status))?'access_denied':result.warnings.length?'upstream_error':result.embedCount?'no_supported_media':'no_public_media';
+  if(result.mediaStatus==='access_denied'||availability)result.playerEmbeds=[];
   if(!result.streams.length&&availability){result.mediaStatus=availability.status;result.warnings.unshift({status:0,message:availability.message});}
   return result;
 }

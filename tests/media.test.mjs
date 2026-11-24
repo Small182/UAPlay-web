@@ -79,3 +79,18 @@ test('removed content gets distinct availability status',async()=>{
   const out=await resolveProviderMedia('uafilm','https://klonua.com/test',async()=>new Response('<p>Контент недоступний</p>'));
   assert.equal(out.mediaStatus,'removed');
 });
+
+test('explicit public player iframe can be offered separately from provider page',async()=>{
+  const result=await resolveProviderMedia('uafilm','https://klonua.com/test',async url=>new Response(url.includes('klonua.com')?'<iframe src="https://ashdi.vip/embed/example"></iframe>':'<html>Public player</html>'));
+  assert.deepEqual(result.playerEmbeds.map(x=>x.url),['https://ashdi.vip/embed/example']);
+});
+test('player iframe restrictions remain respected',async()=>{
+  for(const headers of [{'X-Frame-Options':'SAMEORIGIN'},{'Content-Security-Policy':"frame-ancestors 'self'"}]){
+    const result=await resolveProviderMedia('uafilm','https://klonua.com/test',async url=>url.includes('klonua.com')?new Response('<iframe src="https://ashdi.vip/embed/example"></iframe>'):new Response('<html>Player</html>',{headers}));
+    assert.deepEqual(result.playerEmbeds,[]);
+  }
+});
+test('iframe access denial is not offered as an embedded player',async()=>{
+  const result=await resolveProviderMedia('uafilm','https://klonua.com/test',async url=>url.includes('klonua.com')?new Response('<iframe src="https://ashdi.vip/embed/example"></iframe>'):new Response('',{status:403}));
+  assert.deepEqual(result.playerEmbeds,[]);
+});
