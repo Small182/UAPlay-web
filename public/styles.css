@@ -185,3 +185,11 @@ main{padding-bottom:14px}
 :root[data-view=home] #home-rail .poster-cover{width:100%;height:min(48vw,calc(100dvh - env(safe-area-inset-top,0px) - 390px));min-height:90px;aspect-ratio:2/3}
 }
 @media(min-width:761px){.topbar{height:calc(80px + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px)}}
+
+/* Home is a fixed viewport, not a document scrolling surface (iOS PWA). */
+html[data-view=home],html[data-view=home] body{position:fixed;inset:0;width:100%;height:100%;margin:0;overflow:hidden!important;overscroll-behavior:none}
+html[data-view=home] .app-shell{position:fixed;inset:0;width:100%;height:100%;min-height:0;box-sizing:border-box;overflow:hidden!important;overscroll-behavior:none}
+html[data-view=home] .main-shell{height:100%;min-height:0;overflow:hidden!important}
+html[data-view=home] #app-content{overflow:hidden!important;overscroll-behavior:none}
+html[data-view=home] #home-rail,html[data-view=home] .header-nav{touch-action:pan-x;overscroll-behavior-x:contain;overscroll-behavior-y:none}
+html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!important}
