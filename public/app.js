@@ -1,4 +1,4 @@
-import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
+import { providerFrameUrl, playerFrameUrl, browserProbeUrl, probeBrowserAccess } from './provider-frame.js';
 const $ = selector => document.querySelector(selector);
 const content = $('#app-content');
 const modal = $('#modal-root');
@@ -416,7 +416,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.9 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.10 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
@@ -490,6 +490,19 @@ function showSources(item){
   modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
     <div class="source-bottom"><button class="btn secondary" data-player="${safe(keyFor(item))}">Власне пряме посилання MP4 / HLS</button></div>`);
 }
+function browserProbeButton(provider,kind,value){
+  if(!browserProbeUrl(provider,kind,value))return '';
+  return `<div class="setting-control"><button type="button" class="btn secondary" data-browser-probe="${safe(provider)}" data-probe-kind="${safe(kind)}" data-probe-value="${safe(value)}">Перевірити прямий доступ</button><span class="section-note" data-probe-result role="status" aria-live="polite"></span></div>`;
+}
+async function checkBrowserAccess(button){
+  const output=button.parentElement?.querySelector('[data-probe-result]');
+  if(!output)return;
+  button.disabled=true;output.textContent='Перевірка CORS із цього браузера…';
+  try{
+    const result=await probeBrowserAccess(button.dataset.browserProbe,button.dataset.probeKind,button.dataset.probeValue);
+    output.textContent=result.state==='readable'?`HTTP ${result.status} — браузер може читати відповідь. Це ще не підтверджує доступність відео.`:result.state==='http_error'?`HTTP ${result.status} — джерело відхилило прямий запит.`:result.state==='invalid'?'Некоректна адреса.':'Браузер не отримав доступної для читання відповіді: CORS, мережа або перенаправлення. Точну причину дивіться в Network.';
+  }finally{button.disabled=false;}
+}
 function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
   if(provider==='uaflix')return ''; // provider's full site refused framing in browser testing
   const target=providerFrameUrl(provider,url);
@@ -510,7 +523,7 @@ async function loadProvider(provider){
   const item=state.activeItem;if(!item)return;
   state.activeProvider=provider;
   const providerName=PROVIDER_FALLBACK.find(p=>p[0]===provider)?.[1]||provider;
-  modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>${browserSourceButton(provider)}`, 'providers');
+  modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>${browserSourceButton(provider)}${browserProbeButton(provider,'search',item.title)}`, 'providers');
   const chosen=keyFor(item);const box=$('#source-results');
   const releaseYear=String(item.date||'').slice(0,4);
   try{
@@ -546,7 +559,7 @@ function renderStreamChoices(data){
   state.playerEmbeds=frames.map(p=>p.url);
   const frameList=frames.map((p,i)=>`<button class="switch-row" type="button" data-embed-provider="${safe(source.provider)}" data-embed-url="${safe(p.url)}"><span class="row-index">${choices.length+i+1}.</span><span>${safe(p.label||'Вбудований плеєр')} · Web</span><span class="row-trailing">▶</span></button>`).join('');
   const fallback=source.url?`<a class="source-external" href="${safe(source.url)}" rel="noopener noreferrer" target="_blank">Відкрити сторінку джерела ↗</a>`:'';
-  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${(list+frameList)||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&!frames.length&&data.warnings?.length?(source.provider==='uakino'?data.warnings.map(w=>`<p class="switch-subtitle">${w.stage?`${safe(w.stage==='playlist'?'Запит плейлиста':'Запит плеєра')} · ${safe(w.host||'')} · `:''}${safe(w.message)}</p>`).join(''):`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`):''}${source.provider==='mikai'?'<p class="section-note">Дані та озвучення: <a href="https://mikai.me/" target="_blank" rel="noopener noreferrer">Mikai ↗</a></p>':''}${browserSourceButton(source.provider,source.url,'Відкрити сторінку з плеєром у UAPlay')}${fallback}`, 'providers');
+  modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${(list+frameList)||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&!frames.length&&data.warnings?.length?(source.provider==='uakino'?data.warnings.map(w=>`<p class="switch-subtitle">${w.stage?`${safe(w.stage==='playlist'?'Запит плейлиста':'Запит плеєра')} · ${safe(w.host||'')} · `:''}${safe(w.message)}</p>`).join(''):`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`):''}${source.provider==='mikai'?'<p class="section-note">Дані та озвучення: <a href="https://mikai.me/" target="_blank" rel="noopener noreferrer">Mikai ↗</a></p>':''}${browserSourceButton(source.provider,source.url,'Відкрити сторінку з плеєром у UAPlay')}${source.provider==='uakino'&&!choices.length&&!frames.length?browserProbeButton('uakino','playlist',source.url):''}${fallback}`, 'providers');
 }
 async function playProviderMedia(provider,id){
   const item=state.activeItem;if(!item)return;
@@ -723,6 +736,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.sources){const key=action.dataset.sources;const item=state.lists[key]||state.activeItem;if(item)showSources(item);return;}
   if(action.dataset.provider){loadProvider(action.dataset.provider);return;}
   if(action.hasAttribute('data-back-providers')){showSources(state.activeItem);return;}
+  if(action.dataset.browserProbe){await checkBrowserAccess(action);return;}
   if(action.dataset.embedProvider){openEmbeddedPlayer(action.dataset.embedProvider,action.dataset.embedUrl);return;}
   if(action.dataset.providerFrame){openProviderFrame(action.dataset.providerFrame,action.dataset.frameUrl);return;}
   if(action.dataset.mediaProvider){playProviderMedia(action.dataset.mediaProvider,action.dataset.mediaId);return;}

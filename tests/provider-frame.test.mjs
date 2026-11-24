@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {providerFrameUrl,playerFrameUrl} from '../public/provider-frame.js';
+import {providerFrameUrl,playerFrameUrl,browserProbeUrl,probeBrowserAccess} from '../public/provider-frame.js';
 test('UAFlix and UAFilm provider pages can be opened directly',()=>{
   assert.equal(providerFrameUrl('uaflix'),'https://uafix.net/');
   assert.equal(providerFrameUrl('uafilm','/filmy/test.html'),'https://klonua.com/filmy/test.html');
@@ -28,4 +28,28 @@ test('UAKino accepts configured player origins, not arbitrary pages',()=>{
  assert.equal(playerFrameUrl('uakino','https://ashdi.vip/embed/sample'),'https://ashdi.vip/embed/sample');
  assert.equal(playerFrameUrl('uakino','https://uakino.eu/films/123-sample.html'),null);
  assert.equal(playerFrameUrl('uakino','https://evil.example/player'),null);
+});
+
+test('UAKino page frame stays on selected mirror origin',()=>{
+ assert.equal(providerFrameUrl('uakino','https://uakino.eu/films/123-sample.html'),'https://uakino.eu/films/123-sample.html');
+ assert.equal(providerFrameUrl('uakino','https://uakino.best/films/123-sample.html'),null);
+ assert.equal(providerFrameUrl('uakino','https://evil.example/'),null);
+});
+test('browser probe builds only fixed provider endpoints',()=>{
+ assert.equal(browserProbeUrl('uakino','playlist','https://uakino.eu/films/123-sample.html'),'https://uakino.eu/engine/ajax/playlists.php?news_id=123&xfield=playlist');
+ assert.equal(browserProbeUrl('uaflix','search','Sample title'),'https://uafix.net/index.php?do=search&subaction=search&story=Sample+title');
+ assert.equal(browserProbeUrl('uakino','playlist','https://evil.example/123-sample.html'),null);
+ assert.equal(browserProbeUrl('uaserials','search','Test'),null);
+});
+test('direct browser probe respects CORS and stops on 403',async()=>{
+ let calls=0;
+ const out=await probeBrowserAccess('uaflix','search','Test',async(url,opts)=>{
+   calls++;assert.equal(opts.mode,'cors');assert.equal(opts.credentials,'omit');assert.equal(opts.redirect,'error');
+   return new Response('',{status:403});
+ });
+ assert.deepEqual(out,{state:'http_error',status:403});assert.equal(calls,1);
+});
+test('browser probe distinguishes readable response from unknown network/CORS failure',async()=>{
+ assert.deepEqual(await probeBrowserAccess('uakino','search','Test',async()=>new Response('ok')),{state:'readable',status:200});
+ assert.deepEqual(await probeBrowserAccess('uakino','search','Test',async()=>{throw new TypeError('Failed to fetch')}),{state:'unreadable',status:0});
 });
