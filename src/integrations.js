@@ -66,7 +66,9 @@ function articleLink(provider,value,type=''){
 function normalizedTitle(s){
   return String(s||'').normalize('NFKC').toLowerCase().replace(/[ʼ’'‘\x60]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 }
-function baseCatalogueTitle(s){
+function baseCatalogueTitle(s,provider=''){
+  // UASerials publishes full-series cards with a season range in the label.
+  if(provider==='uaserials')s=String(s||'').replace(/\b\d{1,3}\s*[-–—]\s*\d{1,3}\s*(?:сезон(?:и|ів)?|seasons?)/gi,' ');
   return normalizedTitle(s).replace(/\s+(?:(?:season|сезон|sezon)\s+\d+|\d+\s+(?:season|сезон|sezon))(?:\s.*)?$/i,'')
     .replace(/\s+(?:онлайн|дивитися|дивитись|watch)(?:\s.*)?$/i,'')
     .replace(/\b(?:19|20)\d{2}\b/g,' ').replace(/\s+/g,' ').trim();
@@ -85,7 +87,7 @@ function catalogueSeason(title){
 function rankSources(results,local,original='',strict=false,year=0,type='',season=0,seasonYear=0){
   const a=baseCatalogueTitle(local),b=baseCatalogueTitle(original);
   const score=(x)=>Math.max(0,...[...String(x.title||'').split('/'),x.original||''].map(part=>{
-    const n=baseCatalogueTitle(part);
+    const n=baseCatalogueTitle(part,x.provider);
     if(!n)return 0;
     if(a&&n===a)return 120;
     if(b&&n===b)return 110;
@@ -95,7 +97,7 @@ function rankSources(results,local,original='',strict=false,year=0,type='',seaso
     if(b.length>=6&&n.includes(b))return 28;
     return 0;
   }));
-  const ranked=results.map(item=>({item,score:score(item),year:catalogueYear(item.title,item.url),season:catalogueSeason(item.title)||catalogueSeason(item.url)})).sort((x,y)=>y.score-x.score);
+  const ranked=results.map(item=>({item,score:score(item),year:catalogueYear(item.title,item.provider==='uaserials'&&type==='tv'?'':item.url),season:catalogueSeason(item.title)||catalogueSeason(item.url)})).sort((x,y)=>y.score-x.score);
   let compatible=ranked.filter(x=>{
     if(type==='tv'&&season>0&&x.season&&x.season!==season)return false;
     if(type==='movie'&&strict&&x.season)return false;

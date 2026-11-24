@@ -162,3 +162,23 @@ test('UAFilm reads title and URL from the same short-news card',()=>{
  const html='<div class="short-news__small"><a href="/serialy/1-example.html"><img src="/a.jpg"></a><div class="card-title__block">Example</div></div><div class="short-news__small"><a href="/serialy/2-other.html"><img src="/b.jpg"></a><div class="card-title__block">Other</div></div>';
  assert.deepEqual(parseHtmlSearch('uafilm',html,'tv').map(x=>x.title),['Example','Other']);
 });
+
+test('UASerials full-series slug year is not the release year',async()=>{
+ const html='<a href="/17-example-2025.html"><span class="th-title">Example 1-7 сезон</span><span class="th-title-oname">Original example</span></a><a href="/21-remake-2025.html"><span class="th-title">Example (2025)</span></a><a href="/22-unrelated.html"><span class="th-title">Unrelated</span></a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  for(const season of [1,7]){
+   const reply=await handleIntegration(req('/api/providers/search?provider=uaserials&type=tv&season='+season+'&year=2011&seasonYear='+(season===1?2011:2025)+'&q=Example&original=Original%20example'),{});
+   const rows=(await reply.json()).results;
+   assert.deepEqual(rows.map(x=>x.id),['https://uaserials.my/17-example-2025.html']);
+   assert.equal(rows[0].year,null);
+   assert.equal(rows[0].season,null);
+  }
+ });
+});
+test('UASerials movies still respect release years in the URL',async()=>{
+ const html='<a href="/1-example-1999.html"><span class="th-title">Example</span></a><a href="/2-example-2025.html"><span class="th-title">Example</span></a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const reply=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&q=Example&year=1999'),{});
+  assert.deepEqual((await reply.json()).results.map(x=>x.id),['https://uaserials.my/1-example-1999.html']);
+ });
+});
