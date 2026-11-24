@@ -141,3 +141,20 @@ test('UAKino playlist honors player framing headers',async()=>{
  });
  assert.deepEqual(result.playerEmbeds,[]);
 });
+
+test('UAKino diagnostic distinguishes denied playlist from denied player',async()=>{
+ const article='https://uakino.eu/films/123-sample.html';
+ const playlistDenied=await resolveProviderMedia('uakino',article,async url=>url.includes('playlists.php')?new Response('',{status:403}):new Response('Article'));
+ assert.equal(playlistDenied.warnings[0].stage,'playlist');
+ assert.equal(playlistDenied.warnings[0].host,'uakino.eu');
+ assert.equal(playlistDenied.warnings[0].status,403);
+ const playerDenied=await resolveProviderMedia('uakino',article,async url=>{
+  if(url.includes('playlists.php'))return Response.json({response:'<li data-file="https://ashdi.vip/embed/sample">Film</li>'});
+  if(url.includes('ashdi.vip'))return new Response('',{status:403});
+  return new Response('Article');
+ });
+ assert.equal(playerDenied.warnings[0].stage,'player');
+ assert.equal(playerDenied.warnings[0].host,'ashdi.vip');
+ assert.equal(playerDenied.warnings[0].status,403);
+ assert.deepEqual(playerDenied.playerEmbeds,[]);
+});

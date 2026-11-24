@@ -297,7 +297,7 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
           frameCandidates.push(...publicPlayerFrames(html,page),...playlistFrames.map(x=>x.url));
         }
       }catch(e){
-        result.warnings.push({status:e.upstreamStatus||0,message:e.message});
+        result.warnings.push({status:e.upstreamStatus||0,message:e.message,stage:'playlist',host:new URL(endpoint).hostname});
         if([401,403,451].includes(e.upstreamStatus))return {...result,streams:[],episodes:[],playerEmbeds:[],mediaStatus:'access_denied'};
       }
     }
@@ -319,7 +319,7 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
         for(const label of frameLabels)for(const stream of parsed.streams){const entry={...stream,label:label.label,season:label.season,episode:label.episode};result.streams.push(entry);if(entry.episode||entry.season)result.episodes.push(entry);}
       }else{result.streams.push(...parsed.streams);result.episodes.push(...parsed.episodes);}
       if(next.depth<2)pending.push(...parsed.embeds.map(url=>({url,depth:next.depth+1,from:next.url})));
-    }catch(e){if(result.warnings.length<5)result.warnings.push({status:e.upstreamStatus||0,message:e.message});}
+    }catch(e){if(result.warnings.length<5)result.warnings.push({status:e.upstreamStatus||0,message:e.message,...(provider==='uakino'?{stage:'player',host:new URL(next.url).hostname}:{})});}
     if(result.streams.length>=50)break;
   }
   result.streams=uniqueItems(result.streams).slice(0,50);
