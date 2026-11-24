@@ -119,3 +119,16 @@ test('removed providers are rejected for both search and media API',async()=>{
   }
  });
 });
+
+test('UASerials rejects unrelated titles and respects selected season',async()=>{
+ const html='<a href="/1-other.html">Unrelated</a><a href="/2-sample.html">Sample 2 сезон (2025)</a><a href="/3-sample.html">Sample 1 сезон (2022)</a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const query=async(q)=> (await (await handleIntegration(req('/api/providers/search?provider=uaserials&type=tv&season=1&year=2022&q='+q),{})).json()).results;
+  assert.deepEqual(await query('Absent'),[]);
+  assert.deepEqual((await query('Sample')).map(x=>x.season),[1]);
+ });
+});
+test('UASerials does not pair an empty anchor with another card title',()=>{
+ const html='<a href="/1-wrong.html"><img src="/x.jpg"></a><a href="/2-right.html"><span class="th-title">Sample</span></a>';
+ assert.deepEqual(parseHtmlSearch('uaserials',html).map(x=>x.id),['https://uaserials.my/2-right.html']);
+});

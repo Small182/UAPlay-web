@@ -82,7 +82,7 @@ function catalogueSeason(title){
   const match=s.match(/(?:season|сезон|sezon)[\s_-]*(\d{1,3})|(\d{1,3})[\s_-]*(?:season|сезон|sezon)/i);
   return Number(match?.[1]||match?.[2])||null;
 }
-function rankSources(results,local,original='',strict=false,year=0,type=''){
+function rankSources(results,local,original='',strict=false,year=0,type='',season=0){
   const a=baseCatalogueTitle(local),b=baseCatalogueTitle(original);
   const score=(x)=>Math.max(0,...[...String(x.title||'').split('/'),x.original||''].map(part=>{
     const n=baseCatalogueTitle(part);
@@ -95,15 +95,18 @@ function rankSources(results,local,original='',strict=false,year=0,type=''){
     if(b.length>=6&&n.includes(b))return 28;
     return 0;
   }));
-  const ranked=results.map(item=>({item,score:score(item),year:catalogueYear(item.title,item.url),season:catalogueSeason(item.title)})).sort((x,y)=>y.score-x.score);
+  const ranked=results.map(item=>({item,score:score(item),year:catalogueYear(item.title,item.url),season:catalogueSeason(item.title)||catalogueSeason(item.url)})).sort((x,y)=>y.score-x.score);
   const top=ranked[0]?.score||0;
   let relevant=ranked.filter(x=>top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true);
+  if(type==='tv'&&season>0)relevant=relevant.filter(x=>!x.season||x.season===season);
+  if(type==='movie'&&strict)relevant=relevant.filter(x=>!x.season);
   if(year>=1900){
     const compatible=x=>!x.year||(type==='tv'&&x.season>1?x.year>=year-1:Math.abs(x.year-year)<=1);
     if(relevant.some(x=>x.year&&compatible(x)))relevant=relevant.filter(compatible);
     else if(strict&&type==='movie')relevant=relevant.filter(compatible);
     relevant.sort((x,y)=>Number(!!y.year&&compatible(y))-Number(!!x.year&&compatible(x))||y.score-x.score);
   }
+  if(type==='tv'&&season>0)relevant.sort((x,y)=>Number(y.season===season)-Number(x.season===season));
   return relevant.map(x=>({...x.item,year:x.year,season:x.season}));
 }
 function parseHtmlSearch(provider,html,type='') {
@@ -127,9 +130,9 @@ function parseHtmlSearch(provider,html,type='') {
     let label=piece.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1]||
       classLabel(piece,'th-title(?!-oname)|movie-title|short_title|card-link__text|card-title__block|search-result-title')||attr(opening,'title')||'';
     if(!label&&provider==='uaserials'){
-      // The title may be in the card adjacent to an image anchor.
-      const following=html.slice(anchors.lastIndex,anchors.lastIndex+900);
-      label=classLabel(following,'th-title(?!-oname)');
+      // Read only the current anchor, never a neighbouring card's title.
+      const img=piece.match(/<img\b[^>]*>/i)?.[0]||'';
+      label=attr(img,'alt')||attr(img,'title');
     }
     if(!label)label=piece.slice(opening.length).replace(/<\/a\s*>$/i,'');
     add(href,label);
@@ -167,8 +170,8 @@ async function providerSearch(params) {
     results=normalizeAnime(provider,payload);
   }else results=parseHtmlSearch(provider,body,type);
   const year=Number(params.get('year'))||0;
-  results=rankSources(results,query,original,['uafilm','uaserials'].includes(provider),year,type).slice(0,18);
-  return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,60);
+  results=rankSources(results,query,original,['uafilm','uaserials'].includes(provider),year,type,Number(params.get('season'))||0).slice(0,18);
+  return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,0);
 }
 async function providerMedia(params) {
   const provider=clean(params.get('provider'),24).toLowerCase();
@@ -176,7 +179,7 @@ async function providerMedia(params) {
   const id=params.get('id')||'';
   if(id.length>2048)return err('Завеликий ID');
   const data=await resolveProviderMedia(provider,id);
-  return js({...data,notice:(data.streams.length||data.playerEmbeds?.length)?'Відтворення залежить від доступності потоку та обмежень Safari.':'Сторінка джерела не містить відкритого MP4/HLS. Перевірте відео на сайті джерела.'},200,30);
+  return js({...data,notice:(data.streams.length||data.playerEmbeds?.length)?'Відтворення залежить від доступності потоку та обмежень Safari.':'Сторінка джерела не містить відкритого MP4/HLS. Перевірте відео на сайті джерела.'},200,0);
 }
 async function wallpapers(params){
   const query=clean(params.get('q'),70);

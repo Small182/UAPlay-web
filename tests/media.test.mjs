@@ -120,3 +120,14 @@ test('removed providers and hosts are rejected without external requests',async(
   await assert.rejects(providerRequest('https://'+host+'/test',{},forbidden),/Некоректна адреса/);
  }
 });
+
+test('episode-first and data attribute labels retain episode identity',()=>{
+ const out=parseMediaDocument('<li data-file="https://cdn.example.org/a.mp4">3 серія</li><li data-file="https://cdn.example.org/b.mp4" data-season="2" data-episode="4">Українська</li>','https://uaserials.my/1-show.html');
+ assert.equal(out.episodes[0].episode,3);
+ assert.equal(out.episodes[1].season,2);
+ assert.equal(out.episodes[1].episode,4);
+});
+test('public UASerials iframe may be offered without direct media',async()=>{
+ const result=await resolveProviderMedia('uaserials','https://uaserials.my/1-show.html',async url=>new Response(url.includes('uaserials.my')?'<iframe src="https://ashdi.vip/embed/sample"></iframe>':'<html>Public player</html>'));
+ assert.equal(result.playerEmbeds.length,1);
+});

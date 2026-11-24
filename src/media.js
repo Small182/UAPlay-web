@@ -92,8 +92,9 @@ export function parseMediaDocument(body,base) {
     if(!media||seen.has(media.url))continue;
     seen.add(media.url);
     const label=cappedLabel(match[2]);
-    const season=Number(label.match(/(?:сезон|season|s)\s*(\d{1,3})/i)?.[1])||0;
-    const episode=Number(label.match(/(?:серія|серии|episode|ep|e)\s*(\d{1,4})/i)?.[1])||0;
+    const attr=name=>match[1].match(new RegExp('\\bdata-'+name+'\\s*=\\s*(["\\x27])(\\d+)\\1','i'))?.[2];
+    const season=Number(attr('season')||label.match(/(?:сезон|season|s)\s*(\d{1,3})/i)?.[1]||label.match(/(\d{1,3})\s*(?:сезон|season)/i)?.[1])||0;
+    const episode=Number(attr('episode')||label.match(/(?:серія|серии|episode|ep|e)\s*(\d{1,4})/i)?.[1]||label.match(/(\d{1,4})\s*(?:серія|серия|episode)/i)?.[1])||0;
     const voice=cappedLabel(match[1].match(/\bdata-voice\s*=\s*(["'])(.*?)\1/i)?.[2]||'');
     episodes.push({...media,label:label||voice||'Відтворити',season,episode,voice});
   }
@@ -251,7 +252,7 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const availability=availabilityNotice(content);
   if(availability?.status==='access_denied')return {provider,streams:[],episodes:[],sourcePage:page,mediaStatus:availability.status,warnings:[{status:403,message:availability.message}]};
   const start=parseMediaDocument(content,page);
-  const frameCandidates= provider==='uafilm'&&!availability?publicPlayerFrames(content,page):[];
+  const frameCandidates= ['uafilm','uaserials','eneyida'].includes(provider)&&!availability?publicPlayerFrames(content,page):[];
   const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[],embedCount:start.embeds.length,playerEmbeds:[]};
   const pending=[...new Set([...start.embeds,...frameCandidates])].map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
   // Follow at most five explicit iframe links and two levels, never arbitrary URLs.
