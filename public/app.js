@@ -11,7 +11,7 @@ const ICONS = {
   anime: '<path d="M12 2 4 12l4 2-1 8 11-12-5-2z"/>',
   heart: '<path d="M20.5 8.5c0 5-8.5 11-8.5 11s-8.5-6-8.5-11a4.8 4.8 0 0 1 8.5-3 4.8 4.8 0 0 1 8.5 3z"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.8"/><path d="m16 16 5 5"/>',
-  settings: '<circle cx="12" cy="12" r="3"/><path d="M19 14.5 21 16l-2 3-2.4-1-2.1 1-.5 2.5h-4L9.5 19l-2.1-1L5 19l-2-3 2-1.5v-3L3 10l2-3 2.4 1 2.1-1L10 4.5h4L14.5 7l2.1 1L19 7l2 3-2 1.5z"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M9.5 3h5l.7 2.7 2 .9 2.5-.9 2.5 4.3-2.1 1.8v2.4l2.1 1.8-2.5 4.3-2.5-.9-2 .9-.7 2.7h-5l-.7-2.7-2-.9-2.5.9L1.8 16l2.1-1.8v-2.4L1.8 10l2.5-4.3 2.5.9 2-.9z" transform="translate(0 -1)"/>',
   live: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="m9 9 6 3-6 3z"/>',
   play: '<path d="m8 5 11 7-11 7z"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
@@ -147,6 +147,7 @@ function legalNotice() {
   return `<p class="tmdb-legal">This product uses the TMDB API but is not endorsed or certified by TMDB. Відеоконтент не розміщується в UAPlay.</p>`;
 }
 function buildNav() {
+  document.documentElement.dataset.view=state.view;
   const mainTabs=['home','series','movies','animation','iptv','favorites'];
   $('#side-nav').innerHTML=NAV.filter(([view])=>mainTabs.includes(view)).sort((a,b)=>mainTabs.indexOf(a[0])-mainTabs.indexOf(b[0])).map(([view,label]) => `<button type="button" class="nav-button ${state.view===view||(view==='animation'&&['cartoons','anime'].includes(state.view))?'active':''}" data-view="${view}">${label}</button>`).join('');
   $('#bottom-nav').innerHTML=NAV.filter(([view])=>MOBILE_NAV.includes(view)).map(([view,label,ico])=>`<button type="button" class="bottom-button ${state.view===view?'active':''}" data-view="${view}" aria-label="${label}">${icon(ico)}<span>${label}</span></button>`).join('');
@@ -159,12 +160,16 @@ const HOME_SHELVES = [
   ['Популярні фільми','movies'],['Популярні серіали','series'],
   ['Популярні мультфільми','animation'],['Популярні мультсеріали','cartoons']
 ];
+function countLabel(n,forms){return n+' '+forms[(n%100>=11&&n%100<=14)?2:n%10===1?0:n%10>=2&&n%10<=4?1:2];}
+function titleMeta(item){return [year(item),...(item.type==='tv'?[item.seasons?countLabel(item.seasons,['сезон','сезони','сезонів']):'',item.episodes?countLabel(item.episodes,['серія','серії','серій']):'']:[item.genres?.[0]||'',item.runtime?item.runtime+' хв':''])].filter(Boolean).join(' · ');}
+const metaRequests=new Map();
+async function enrichHero(item){if(!item||state.demoMode)return;const key=keyFor(item);if(!metaRequests.has(key))metaRequests.set(key,api('/api/title/'+item.type+'/'+item.id).catch(()=>null));const data=await metaRequests.get(key);if(!data)return;Object.assign(item,data);if($('#hero-watch')?.dataset.title===key)$('#hero-meta').textContent=titleMeta(item);}
 function heroPanel(movie){
   const key=movie?keyFor(movie):'';
   const img=movie?imageUrl(movie.poster,'w342'):'';
   return `<section class="home-hero" id="catalog-hero" aria-label="Вибраний фільм">
     <div class="hero-content"><h1 class="hero-title" id="hero-title">${safe(movie?.title||'UAPlay')}</h1>
-      <div class="hero-meta" id="hero-meta">${movie?`${safe(year(movie))} <span>·</span> ${movie.type==='tv'?'Серіал':'Фільм'}`:''}</div>
+      <div class="hero-meta" id="hero-meta">${movie?safe(titleMeta(movie)):''}</div>
       <p class="hero-desc" id="hero-desc">${safe(movie?.overview||'Україномовний каталог фільмів та серіалів.')}</p>
       <div class="hero-buttons"><button class="btn primary" id="hero-watch" data-title="${safe(key)}">▶ &nbsp;Дивитися</button>
       <button class="btn secondary" id="hero-favorite" data-favorite="${safe(key)}">${movie&&state.favorites[key]?'✓  У вибраному':'+  У вибране'}</button></div>
@@ -176,9 +181,9 @@ function updateHero(movie){
   if(!movie)return;
   const title=$('#hero-title');if(!title)return;
   title.textContent=movie.title||'';
-  $('#hero-meta').textContent=`${year(movie)}  ·  ${movie.type==='tv'?'Серіал':'Фільм'}`;
+  $('#hero-meta').textContent=titleMeta(movie);
   $('#hero-desc').textContent=movie.overview||'';
-  $('#hero-watch').dataset.title=keyFor(movie);
+  $('#hero-watch').dataset.title=keyFor(movie);enrichHero(movie);
   $('#hero-favorite').dataset.favorite=keyFor(movie);
   $('#hero-favorite').textContent=state.favorites[keyFor(movie)]?'✓  У вибраному':'+  У вибране';
   const poster=$('#catalog-hero .hero-poster');if(poster){const url=imageUrl(movie.poster,'w342');poster.innerHTML=url?`<img src="${url}" alt="Постер: ${safe(movie.title)}">`:'<span>UAPLAY</span>';}
@@ -205,7 +210,8 @@ async function renderHome() {
       <button class="btn shelf-more" data-view="${section}">Більше &nbsp;›</button>
     </div></div>
     ${items.length?`<div class="poster-rail switch-rail" id="home-rail">${items.map(item=>posterCard(item).replace('class="poster-card"',`class="poster-card ${movie&&keyFor(item)===keyFor(movie)?'selected':''}" data-home-item="${safe(keyFor(item))}"`)).join('')}</div>`:'<div class="empty">Добірка порожня</div>'}
-    ${legalNotice()}`;
+    `;
+  enrichHero(movie);
 }
 function animationTabs(section){
   if(!['animation','cartoons','anime'].includes(section))return '';
@@ -225,7 +231,7 @@ function paintCategory() {
   const label=NAV.find(([name])=>name===state.activeCategory)?.[1]||'Каталог';
   content.innerHTML=`<div class="page-intro"><div><h1>${label}</h1><p>${state.categoryItems.length} записів у добірці</p></div></div>${modeBanner()}
     ${animationTabs(state.activeCategory)}${sortControl()}${state.categoryItems.length?posterGrid(state.categoryItems):`<div class="empty"><div class="empty-icon">◇</div><h2>Поки немає записів</h2><p>Підключіть TMDB, щоб побачити повний каталог.</p></div>`}
-    ${state.page<state.categoryTotal?'<button class="load-more" data-more>Завантажити ще</button>':''}${legalNotice()}`;
+    ${state.page<state.categoryTotal?'<button class="load-more" data-more>Завантажити ще</button>':''}`;
 }
 async function loadMore() {
   if(state.page>=state.categoryTotal || !state.activeCategory)return;
@@ -237,7 +243,7 @@ async function renderSearch() {
   ++state.loadId;
   content.innerHTML=`<div class="page-intro"><div><h1>Пошук</h1><p>Знайдіть фільм або серіал за назвою</p></div></div>${modeBanner()}
     <label class="search-box">${icon('search')}<input id="search-input" autocomplete="off" type="search" placeholder="Введіть назву фільму або серіалу…" value="${safe(state.searchQuery)}" aria-label="Назва фільму чи серіалу"></label>
-    <div id="search-results"></div>${legalNotice()}`;
+    <div id="search-results"></div>`;
   await performSearch();
 }
 async function performSearch() {
@@ -368,7 +374,7 @@ async function renderFavorites(){
   }
   const items=tab==='history'?Object.values(state.history).sort((a,b)=>b.watchedAt-a.watchedAt):Object.values(state.favorites).filter(i=>tab==='all'||!state.history[keyFor(i)]);
   loadVisibleItems(items);
-  content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+(tab==='history'?'<button class="btn secondary" data-clear-history>Очистити історію</button>':'')+(items.length?posterGrid(items):'<div class="empty"><h2>Тут поки порожньо</h2></div>')+legalNotice();
+  content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+(tab==='history'?'<button class="btn secondary" data-clear-history>Очистити історію</button>':'')+(items.length?posterGrid(items):'<div class="empty"><h2>Тут поки порожньо</h2></div>');
 }
 const IPTV_REGIONS=["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UK","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","XK","YE","YT","ZA","ZM","ZW"];
 function countryOptions(){const names=new Intl.DisplayNames(['uk'],{type:'region'});return IPTV_REGIONS.map(c=>[c.toLowerCase(),names.of(c)]).sort((a,b)=>a[1].localeCompare(b[1],'uk')).map(([c,n])=>'<option value="'+c+'">'+safe(n)+'</option>').join('');}
@@ -376,7 +382,7 @@ async function renderIptv() {
   const id=++state.loadId;
   content.innerHTML=`<div class="page-intro"><div><h1>IPTV</h1><p>Прямі трансляції з відкритих плейлистів iptv-org</p></div></div>
     <div class="setting-control" style="margin-bottom:20px"><label for="iptv-country">Країна</label><select id="iptv-country" aria-label="Країна IPTV">${countryOptions()}</select></div>
-    <label class="search-box">${icon('search')}<input type="search" id="channel-search" value="${safe(state.channelQuery)}" placeholder="Знайти телеканал…" aria-label="Пошук телеканалів"></label><div class="setting-control"><label for="iptv-group">Жанр</label><select id="iptv-group"><option value="">Усі жанри</option></select><button type="button" class="btn secondary" data-iptv-favorites>${state.iptvOnlyFavorites?"Усі канали":"★ Вибране"}</button></div><div id="iptv-results"><p class="muted">Завантажуємо канали…</p></div>${legalNotice()}`;
+    <label class="search-box">${icon('search')}<input type="search" id="channel-search" value="${safe(state.channelQuery)}" placeholder="Знайти телеканал…" aria-label="Пошук телеканалів"></label><div class="setting-control"><label for="iptv-group">Жанр</label><select id="iptv-group"><option value="">Усі жанри</option></select><button type="button" class="btn secondary" data-iptv-favorites>${state.iptvOnlyFavorites?"Усі канали":"★ Вибране"}</button></div><div id="iptv-results"><p class="muted">Завантажуємо канали…</p></div>`;
   $('#iptv-country').value=state.iptvCountry;
   try {const result=await api(`/api/iptv?country=${state.iptvCountry}`);if(id!==state.loadId)return;state.channels=result.channels||[];paintChannels();}
   catch(e){if(id!==state.loadId)return;$('#iptv-results').innerHTML=`<div class="empty"><h2>Не вдалося завантажити IPTV</h2><p>${safe(e.message)}</p><button type="button" class="btn primary" data-refresh-iptv>Спробувати знову</button></div>`;}
@@ -404,13 +410,12 @@ async function renderSettings() {
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
     <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
-    <div class="settings-card"><h3>Каталог TMDB</h3><p>Статус API та доступність актуальних назв.</p>
-      <div class="status-line"><span class="status-bullet ${configured?'':'bad'}"></span>${configured?'Ключ TMDB задано. Якщо каталог не відкривається, перевірте /api/catalog.':'TMDB_API_KEY або TMDB_TOKEN не задано — увімкнено демонстраційний режим'}</div></div>
+    
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
-    <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.14 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
-      <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
+    
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.15 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+      <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
   if(!NAV.some(([v])=>v===view)&&!HOME_SHELVES.some(([,v])=>v===view))view='home';
@@ -448,12 +453,12 @@ function drawDetails(item,loading=false) {
     <button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button>
     <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад">‹</button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><span>UAPlay</span></div>
     <div class="detail-layout"><div class="detail-body"><h2>${safe(item.title)}</h2>
-      <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(year(item))}</span><span>${item.type==='tv'?'Серіал':'Фільм'}</span>${item.runtime?`<span>${item.runtime} хв</span>`:''}</div>
+      <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(titleMeta(item))}</span></div>
       <p class="detail-description">${safe(item.overview || 'Опис відсутній.')}</p>
       ${item.genres?.length?`<p class="section-note">${safe(item.genres.join(' · '))}</p>`:''}
       <div class="detail-buttons"><button class="btn primary" data-sources="${safe(key)}">${icon('play')} Дивитися</button>
       <button class="btn secondary" data-favorite="${safe(key)}">${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}</button><button class="btn secondary" data-mark-watched="${safe(key)}">${state.history[key]?.completed?'Переглянуто':'Позначити переглянутим'}</button></div>
-      ${item.type==='tv'?`<div class="detail-extra"><h3>Сезони й серії</h3>${item.seasonList?.length?`<div class="setting-control"><label for="season-select">Сезон</label><select id="season-select">${item.seasonList.map(s=>`<option value="${s.number}">${safe(s.title||`Сезон ${s.number}`)} · ${s.episodes} серій</option>`).join('')}</select></div><div id="episode-list" style="margin-top:13px">Обирайте сезон, щоб переглянути серії.</div>`:`<p class="section-note">${loading?'Завантажуємо список сезонів…':'Інформація про сезони недоступна у деморежимі.'}</p>`}</div>`:''}
+
       ${loading?'<p class="section-note">Завантажуємо подробиці…</p>':''}
     </div><div class="detail-poster">${poster?`<img src="${poster}" alt="Постер: ${safe(item.title)}">`: ''}</div></div></section></div>`;
   if(item.seasonList?.length){const select=$('#season-select');if(select){select.value=String(state.selectedSeason);if(!select.value)select.selectedIndex=0;loadSeason(select.value);}}
@@ -479,9 +484,9 @@ function switchScreen(title,body,back='close'){
 }
 function showSources(item){
   cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';
-  const extra=item.type==='tv'?`<p class="switch-subtitle">Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}</p>`:'';
+  const extra='';
   modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
-    <div class="source-bottom"><button class="btn secondary" data-player="${safe(keyFor(item))}">Власне пряме посилання MP4 / HLS</button></div>`);
+`);
 }
 function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
   const target=providerFrameUrl(provider,url);
@@ -497,6 +502,20 @@ function openProviderFrame(provider,value){
     <iframe class="provider-web-frame" src="${safe(target)}" title="${safe(name)}" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen; autoplay" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
     <p class="section-note">UAPlay не може перевірити стан входу або відтворення всередині стороннього сайту. Якщо екран порожній, сайт може забороняти вбудовування.</p>
     <div class="provider-browser-actions"><button class="btn secondary" type="button" data-provider="${safe(returnProvider)}">Назад до результатів</button><a class="btn secondary" href="${safe(target)}" target="_blank" rel="noopener noreferrer">Відкрити у браузері ↗</a></div></div>`,'providers');
+}
+async function selectSourceSeason(provider){
+  state.activeProvider=provider;
+  const item=state.activeItem;if(!item)return;
+  let seasons=item.seasonList||[];
+  if(!seasons.length&&!state.demoMode){try{const d=await api('/api/title/tv/'+item.id);if(state.activeItem!==item||state.activeProvider!==provider)return;Object.assign(item,d);seasons=d.seasonList||[];}catch{}}
+  if(!seasons.length){toast('Список сезонів недоступний');return;}
+  modal.innerHTML=switchScreen('Оберіть сезон','<div class="switch-list-rows">'+seasons.map(x=>'<button class="switch-row" data-source-season="'+x.number+'"><span>'+safe(x.title||('Сезон '+x.number))+'</span><span>›</span></button>').join('')+'</div>','providers');
+}
+async function selectSourceEpisodes(provider,season){
+  state.selectedSeason=season;const item=state.activeItem;
+  modal.innerHTML=switchScreen('Оберіть серію','<div id="source-episode-list">Завантажуємо…</div>','providers');
+  const box=$('#source-episode-list');
+  try{const d=await api('/api/title/tv/'+item.id+'/season/'+season);if(!box.isConnected)return;box.innerHTML='<div class="switch-list-rows">'+(d.episodes||[]).map(e=>'<button class="switch-row" data-source-episode="'+e.number+'"><span>'+e.number+'. '+safe(e.title)+'</span><span>›</span></button>').join('')+'</div>';}catch(e){if(box.isConnected)box.textContent=e.message;}
 }
 async function loadProvider(provider){
   if(!PROVIDER_FALLBACK.some(([id])=>id===provider))return;
@@ -532,9 +551,9 @@ function renderStreamChoices(data){
   const streams=Array.isArray(data.streams)?data.streams:[];
   const episodes=Array.isArray(data.episodes)?data.episodes:[];
   const filtered=episodes.filter(s=>!s.season||s.season===state.selectedSeason).filter(s=>!s.episode||s.episode===state.selectedEpisode);
-  const choices=state.activeItem?.type==='tv'&&episodes.some(s=>s.season||s.episode)?filtered:streams;
+  const choices=state.activeItem?.type==='tv'&&['uaserials','eneyida'].includes(source.provider)?filtered.filter(s=>Number(s.episode)===state.selectedEpisode&&Number(s.season)===state.selectedSeason):state.activeItem?.type==='tv'&&episodes.some(s=>s.season||s.episode)?filtered:streams;
   const emptyMessage=data.mediaStatus==='licensed'?'Mikai не надає плеєр для цього ліцензованого аніме.':(episodes.length&&streams.length)||data.playerEmbeds?.some(p=>p.episode)?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
-  const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
+  const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const frames=(Array.isArray(data.playerEmbeds)?data.playerEmbeds:[]).filter(p=>state.activeItem?.type!=='tv'||((!p.season||p.season===state.selectedSeason)&&(!p.episode||p.episode===state.selectedEpisode))).map(p=>({url:playerFrameUrl(source.provider,p.url),label:p.label})).filter(p=>p.url);
   state.playerEmbeds=frames.map(p=>p.url);
   const frameList=frames.map((p,i)=>`<button class="switch-row" type="button" data-embed-provider="${safe(source.provider)}" data-embed-url="${safe(p.url)}"><span class="row-index">${choices.length+i+1}.</span><span>${safe(p.label||'Вбудований плеєр')} · Web</span><span class="row-trailing">▶</span></button>`).join('');
@@ -715,7 +734,9 @@ document.addEventListener('click',async event=>{
   if(action.dataset.favorite){toggleFavorite(action.dataset.favorite);return;}
   if(action.hasAttribute('data-more')){await loadMore();return;}
   if(action.dataset.sources){const key=action.dataset.sources;const item=state.lists[key]||state.activeItem;if(item)showSources(item);return;}
-  if(action.dataset.provider){loadProvider(action.dataset.provider);return;}
+  if(action.dataset.provider){if(state.activeItem?.type==='tv')selectSourceSeason(action.dataset.provider);else loadProvider(action.dataset.provider);return;}
+  if(action.dataset.sourceSeason!==undefined){selectSourceEpisodes(state.activeProvider,Number(action.dataset.sourceSeason));return;}
+  if(action.dataset.sourceEpisode){state.selectedEpisode=Number(action.dataset.sourceEpisode);loadProvider(state.activeProvider);return;}
   if(action.hasAttribute('data-back-providers')){showSources(state.activeItem);return;}
   if(action.dataset.embedProvider){openEmbeddedPlayer(action.dataset.embedProvider,action.dataset.embedUrl);return;}
   if(action.dataset.providerFrame){openProviderFrame(action.dataset.providerFrame,action.dataset.frameUrl);return;}
