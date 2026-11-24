@@ -43,25 +43,88 @@ function normalizeAnime(provider,data){
     return {id:String(id),provider,title:clean(title,185),name:PROVIDERS[provider].name};
   }).filter(e=>digits(e.id)&&e.title);
 }
-function parseHtmlSearch(provider,html) {
-  const {host,name}=PROVIDERS[provider];const matches=[];const seen=new Set();
-  // Provider-specific article cards are preferred to site navigation menus.
-  let matcher = /<a\b[^>]*href\s*=\s*(["'])(.*?)\1[^>]*>[\s\S]*?<\/a\s*>/gi;
-  let result;
-  while((result=matcher.exec(html)) && matches.length<18) {
-    const piece=result[0];
-    if(provider==='uaflix' && !/sres-wrap/.test(piece))continue;
-    if(provider==='uakino' && !/(movie-item|movie-title|short-item)/.test(piece))continue;
-    let link;
-    try{link=new URL(result[2],host);}catch{continue;}
-    if(link.protocol!=='https:'||link.origin!==host||seen.has(link.href))continue;
-    if(link.searchParams.has('do')||link.pathname==='/'||/\b(?:login|account|register|category|search|news)\b/i.test(link.pathname))continue;
-    const label=piece.match(/<(?:h2|h3)[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1]||
-      piece.match(/class=["'][^"']*(?:th-title|movie-title)[^"']*["'][^>]*>([\s\S]*?)<\//i)?.[1]||
-      piece.match(/title\s*=\s*["']([^"']+)["']/i)?.[1]||piece.replace(/^[\s\S]*?>/,'').replace(/<\/a\s*>[\s\S]*$/,'');
-    const title=htmlPlain(label);
-    if(title.length<3)continue;
-    seen.add(link.href);matches.push({id:link.href,provider,title,name,url:link.href});
+// Match actual catalogue article URLs, not navigation or season filters.
+// Based on the validation and title ranking in UAPlay-nx catalog.c.
+function articleLink(provider,value,type=''){
+  const conf=PROVIDERS[provider];if(!conf||!value)return null;
+  let url;
+  try{url=new URL(value.replace(/&amp;/gi,'&'),conf.host);}catch{return null;}
+  if(url.origin!==conf.host||url.username||url.password||url.search||url.hash)return null;
+  const path=url.pathname;
+  if(provider==='uaflix'){
+    const match=path.match(/^\/(films|serials|anime)\/[a-z0-9-]+\/$/i);
+    if(!match)return null;
+    if(type==='movie'&&match[1]!=='films'||type==='tv'&&match[1]==='films')return null;
+  }else if(provider==='uaserials'){
+    if(!/^\/\d+-[^/]+\.html$/i.test(path))return null;
+  }else{
+    if(!/\/\d+-[^/]+\.html$/i.test(path))return null;
+    if(provider==='uafilm'){
+      if(type==='movie'&&/\/(?:serialy|multserialy)\//i.test(path))return null;
+      if(type==='tv'&&/\/(?:filmy|multfilmy)\//i.test(path))return null;
+    }
+    if(provider==='uakino'&&type==='movie'&&/\/(?:seriesss|anime-series)\//i.test(path))return null;
+  }
+  return url.href;
+}
+function normalizedTitle(s){
+  return String(s||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+}
+function rankSources(results,local,original=''){
+  const a=normalizedTitle(local),b=normalizedTitle(original);
+  const score=(x)=>Math.max(0,...String(x.title||'').split('/').map(part=>{
+    const n=normalizedTitle(part);
+    if(!n)return 0;
+    if(a&&n===a)return 120;
+    if(b&&n===b)return 110;
+    if(a&&(' '+n+' ').includes(' '+a+' '))return 78;
+    if(b&&(' '+n+' ').includes(' '+b+' '))return 68;
+    if(a.length>=6&&n.includes(a))return 32;
+    if(b.length>=6&&n.includes(b))return 28;
+    return 0;
+  }));
+  const ranked=results.map(item=>({item,score:score(item)})).sort((x,y)=>y.score-x.score);
+  const top=ranked[0]?.score||0;
+  return ranked.filter(x=>top>=110?x.score>=100:top>=68?x.score>0:true).map(x=>x.item);
+}
+function parseHtmlSearch(provider,html,type='') {
+  const conf=PROVIDERS[provider];if(!conf)return [];
+  const matches=[];const seen=new Set();
+  const attr=(s,key)=>s.match(new RegExp('\\b'+key+'\\s*=\\s*(["\\x27])(.*?)\\1','i'))?.[2]||'';
+  const classLabel=(s,pattern)=>s.match(new RegExp('class\\s*=\\s*["\\x27][^"\\x27]*(?:'+pattern+')[^"\\x27]*["\\x27][^>]*>([\\s\\S]*?)<\\/[^>]+>','i'))?.[1]||'';
+  const add=(href,label)=>{
+    const url=articleLink(provider,href,type);const title=htmlPlain(label);
+    if(!url||title.length<2||seen.has(url)||matches.length>=60)return;
+    seen.add(url);matches.push({id:url,provider,title,name:conf.name,url});
+  };
+  const anchors=/<a\b[^>]*>[\s\S]*?<\/a\s*>/gi;
+  let match;
+  while((match=anchors.exec(html))&&matches.length<60){
+    const piece=match[0];const opening=piece.slice(0,piece.indexOf('>')+1);
+    const href=attr(opening,'href');if(!articleLink(provider,href,type))continue;
+    const cls=attr(opening,'class');
+    if(provider==='uaflix'&&!/\bsres-wrap\b/.test(cls))continue;
+    if(provider==='uakino'&&!/\b(?:movie-title|search-result-link)\b/.test(cls))continue;
+    if(provider==='eneyida'&&!/\bshort_title\b/.test(cls)&&!classLabel(piece,'short_title'))continue;
+    if(provider==='uafilm'&&!/\b(?:card-link__text|card-title__block)\b/.test(cls)&&!classLabel(piece,'card-link__text|card-title__block'))continue;
+    let label=piece.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1]||
+      classLabel(piece,'th-title(?!-oname)|movie-title|short_title|card-link__text|card-title__block|search-result-title')||attr(opening,'title')||'';
+    if(!label&&provider==='uaserials'){
+      // The title may be in the card adjacent to an image anchor.
+      const following=html.slice(anchors.lastIndex,anchors.lastIndex+900);
+      label=classLabel(following,'th-title(?!-oname)');
+    }
+    if(!label)label=piece.slice(opening.length).replace(/<\/a\s*>$/i,'');
+    add(href,label);
+  }
+  // Eneyida stores its title and anchor within the same article.
+  if(provider==='eneyida'){
+    for(const a of html.matchAll(/<article\b[^>]*>[\s\S]*?<\/article\s*>/gi)){
+      const label=classLabel(a[0],'short_title');if(!label)continue;
+      for(const link of a[0].matchAll(/<a\b[^>]*>/gi)){
+        const href=attr(link[0],'href');if(articleLink(provider,href,type)){add(href,label);break;}
+      }
+    }
   }
   return matches;
 }
@@ -79,11 +142,13 @@ async function providerSearch(params) {
       body:new URLSearchParams({do:'search',subaction:'search',search_start:'0',full_search:'0',result_from:'1',story:query}).toString()};
   }else endpoint=`${conf.host}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`;
   const {text:body}=await providerRequest(endpoint,options);
+  const type=params.get('type')||'';const original=clean(params.get('original'),100);
   let results;
   if(conf.type==='json'){
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
     results=normalizeAnime(provider,payload);
-  }else results=parseHtmlSearch(provider,body);
+  }else results=parseHtmlSearch(provider,body,type);
+  results=rankSources(results,query,original).slice(0,18);
   return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,60);
 }
 async function providerMedia(params) {

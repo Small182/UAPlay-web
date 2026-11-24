@@ -11,7 +11,7 @@ test('normalize Mikai and AnimeON API data',()=>{
   assert.deepEqual(normalizeAnime('animeon',{results:[{id:5,titleUa:'Аніме'}]})[0].title,'Аніме');
 });
 test('provider HTML parser only accepts URLs on original host',()=>{
-  const body='<a class="sres-wrap" href="https://uafix.net/film/123"><h2>Тестовий фільм</h2></a>'+
+  const body='<a class="sres-wrap" href="https://uafix.net/films/test-film/"><h2>Тестовий фільм</h2></a>'+
     '<a class="sres-wrap" href="https://untrusted.example/bad"><h2>Other</h2></a>';
   const sources=parseHtmlSearch('uaflix',body);
   assert.equal(sources.length,1);assert.equal(sources[0].title,'Тестовий фільм');
@@ -61,4 +61,25 @@ test('provider search reports upstream 403',async()=>{
     const reply=await handleIntegration(req('/api/providers/search?provider=uaflix&q=Test'),{});
     assert.equal(reply.status,502);assert.equal((await reply.json()).upstreamStatus,403);
   });assert.equal(n,1);
+});
+
+test('UASerials navigation and season filters never become search results',()=>{
+  const menu='<a href="/serials/">Серіали</a><a href="/films/">Фільми</a><a href="/sezon/1/">1 сезон</a>';
+  const valid='<a href="/1234-test-film.html"><div class="th-title">Тестовий фільм</div></a>';
+  assert.equal(parseHtmlSearch('uaserials',menu).length,0);
+  assert.equal(parseHtmlSearch('uaserials',menu+valid).length,1);
+  assert.equal(parseHtmlSearch('uaserials',menu+valid)[0].title,'Тестовий фільм');
+});
+test('UAFlix rejects category and wrong media type links',()=>{
+  const html='<a class="sres-wrap" href="/films/action/extra/">Категорія</a><a class="sres-wrap" href="/serials/test-show/"><h2>Серіал</h2></a><a class="sres-wrap" href="/films/test-film/"><h2>Фільм</h2></a>';
+  assert.deepEqual(parseHtmlSearch('uaflix',html,'movie').map(x=>x.title),['Фільм']);
+});
+test('exact catalogue title outranks unrelated article and menu',async()=>{
+  const html='<a href="/films/">Фільми</a><a href="/111-other.html"><span class="th-title">Other</span></a><a href="/123-test.html"><span class="th-title">Test title</span></a>';
+  await withMockFetch(async()=>new Response(html),async()=>{
+    const reply=await handleIntegration(req('/api/providers/search?provider=uaserials&q=Test%20title&type=movie'),{});
+    assert.equal(reply.status,200);
+    const body=await reply.json();
+    assert.deepEqual(body.results.map(x=>x.title),['Test title']);
+  });
 });
