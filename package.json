@@ -1,13 +1,13 @@
 {
   "name": "uaplay-web",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "UAPlay Progressive Web App for iOS and other browsers, hosted on Cloudflare Workers",
   "scripts": {
     "dev": "wrangler dev --local",
     "deploy": "wrangler deploy",
-    "check": "node --test tests/*.test.mjs",
+    "check": "node --check public/app.js && node --test tests/*.test.mjs",
     "build:pages": "python3 scripts/build_pages.py",
     "serve:static": "python3 -m http.server 8080 -d public"
   },

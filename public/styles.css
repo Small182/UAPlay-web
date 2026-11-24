@@ -128,3 +128,5 @@ main{padding-bottom:14px}
 :root[data-theme=light] .nav-button{color:#243642}:root[data-theme=light] .nav-button.active{background:#cfdae0;color:#17242e}
 :root[data-theme=light] .home-hero,:root[data-theme=light] .switch-row,:root[data-theme=light] .switch-detail-screen .detail-layout,:root[data-theme=light] .switch-detail-screen .episode{background:#f3f6f8;color:#17242e}
 :root[data-theme=light] .switch-screen-header h1,:root[data-theme=light] .hero-title,:root[data-theme=light] .poster-title{color:#17242e}
+
+.channel-entry{display:flex;gap:7px;align-items:center}.channel-entry .channel-card{flex:1;min-width:0}.channel-entry>.btn{flex-shrink:0}video::cue{font-size:var(--cue-size,100%)}#download-queue .offline-row button{margin:4px 5px}.player-options input[type=file]{max-width:190px;color:#e6edf2}

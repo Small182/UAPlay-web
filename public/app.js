@@ -36,7 +36,7 @@ const persisted = readStore();
 const state = {
   view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
   searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {},
-  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: persisted.disabledProviders || [], theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
+  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: persisted.disabledProviders || [], theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
   searchTimer:0, toastTimer:0, playerControlsTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -291,13 +291,67 @@ async function importOffline(file){
     toast('Відео збережено для офлайн-перегляду');state.libraryTab='offline';await renderFavorites();
   }catch(e){toast('Не вдалося зберегти файл: '+(e?.message||'ліміт сховища'));}
 }
+const MAX_LOCAL_DOWNLOAD=256*1024*1024;
+function drawDownloads(){
+  const target=$('#download-queue');if(!target)return;
+  target.innerHTML=state.downloads.map(j=>{
+    const progress=j.total?Math.min(100,Math.floor(j.bytes/j.total*100))+'%':(j.bytes/1048576).toFixed(1)+' МБ';
+    const label={queued:'У черзі',active:'Завантаження',paused:'Пауза',failed:'Помилка',done:'Готово'}[j.status]||j.status;
+    return '<div class="offline-row"><strong>'+safe(j.name)+'</strong> · '+safe(label)+' · '+safe(progress)+' '+safe(j.error||'')+
+      (j.status==='active'||j.status==='queued'?'<button class="btn secondary" data-download-pause="'+j.id+'">Пауза</button>':'')+
+      (j.status==='paused'||j.status==='failed'?'<button class="btn secondary" data-download-resume="'+j.id+'">Продовжити / повторити</button>':'')+
+      '<button class="btn danger" data-download-cancel="'+j.id+'">'+(j.status==='done'?'Прибрати зі списку':'Скасувати')+'</button></div>';
+  }).join('');
+}
+function enqueueDownload(raw){
+  let u;try{u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password||!/\.(mp4|m4v|webm|mov)$/i.test(u.pathname))throw Error();}catch{return toast('Потрібна пряма HTTPS-адреса дозволеного відеофайлу MP4, MOV або WebM.');}
+  if(state.downloads.length>=16)return toast('Черга заповнена');
+  const id=crypto.randomUUID(),name=decodeURIComponent(u.pathname.split('/').at(-1)||'video').slice(0,150);
+  state.downloads.push({id,url:u.href,name,status:'queued',bytes:0,total:0,error:''});
+  drawDownloads();runDownloadQueue();
+}
+async function runDownloadQueue(){
+  if(state.downloadActive||$('#video'))return;
+  const job=state.downloads.find(x=>x.status==='queued');if(!job)return;
+  const controller=new AbortController();state.downloadActive={id:job.id,controller};
+  job.status='active';job.bytes=0;job.total=0;job.error='';drawDownloads();
+  try{
+    const response=await fetch(job.url,{signal:controller.signal,mode:'cors',credentials:'omit',redirect:'error'});
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const mime=response.headers.get('content-type')||'';
+    if(!/^video\/|^application\/octet-stream/i.test(mime))throw Error('Сервер не повернув відеофайл');
+    job.total=Number(response.headers.get('content-length'))||0;
+    if(job.total>MAX_LOCAL_DOWNLOAD)throw Error('Ліміт вебзавантаження: 256 МБ на файл');
+    const reader=response.body?.getReader();if(!reader)throw Error('Потокове завантаження не підтримується');
+    const chunks=[];let lastPaint=0;
+    while(true){
+      const {done,value}=await reader.read();if(done)break;
+      job.bytes+=value.byteLength;
+      if(job.bytes>MAX_LOCAL_DOWNLOAD){await reader.cancel();throw Error('Ліміт 256 МБ перевищено');}
+      chunks.push(value);if(Date.now()-lastPaint>250){drawDownloads();lastPaint=Date.now();}
+    }
+    if(controller.signal.aborted||job.status!=='active')return;
+    const blob=new Blob(chunks,{type:mime.split(';')[0]});
+    await offlineOperation('readwrite','put',{id:job.id,name:job.name,size:blob.size,blob,added:Date.now()});
+    if(job.status==='active'){job.status='done';toast('Завантаження завершено');}
+    else await offlineOperation('readwrite','delete',job.id);
+  }catch(e){if(job.status==='active'){job.status='failed';job.error=e.message||'Мережевий збій';}}
+  finally{state.downloadActive=null;drawDownloads();if(state.view==='favorites'&&state.libraryTab==='offline')renderFavorites();runDownloadQueue();}
+}
+function controlDownload(id,action){
+  const j=state.downloads.find(x=>x.id===id);if(!j)return;
+  if(action==='pause'){j.status='paused';if(state.downloadActive?.id===id)state.downloadActive.controller.abort();}
+  else if(action==='resume'){j.status='queued';j.error='';}
+  else{j.status='cancelled';if(state.downloadActive?.id===id)state.downloadActive.controller.abort();state.downloads=state.downloads.filter(x=>x.id!==id);}
+  drawDownloads();runDownloadQueue();
+}
 async function renderFavorites(){
   ++state.loadId;const id=state.loadId;
   const tabs=[['saved','На майбутнє'],['all','Вибране'],['history','Історія'],['offline','Завантажені']];
   const tab=state.libraryTab||'saved';
   const nav='<div class="library-tabs">'+tabs.map(([v,t])=>'<button class="btn '+(v===tab?'primary':'secondary')+'" data-library-tab="'+v+'">'+t+'</button>').join('')+'</div>';
   if(tab==='offline'){
-    content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+'<div class="settings-card"><p>Імпортуйте власні відеофайли для перегляду без інтернету. Браузер може очищати локальне сховище.</p><input id="offline-import" type="file" accept="video/*,.mp4,.m4v,.mov,.webm"></div><div id="offline-list">Завантаження…</div>';
+    content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+'<div class="settings-card"><p>Імпортуйте власні відеофайли для перегляду без інтернету. Браузер може очищати локальне сховище.</p><input id="offline-import" type="file" accept="video/*,.mp4,.m4v,.mov,.webm"><form id="offline-download-form" class="player-form"><input class="input-line" id="offline-url" type="url" required placeholder="HTTPS-адреса вашого MP4 / WebM"><button class="btn secondary" type="submit">Завантажити</button></form><p class="section-note">Тільки файли, які дозволено зберігати. Потрібна підтримка CORS. Максимум 256 МБ. Після паузи завантаження починається заново.</p></div><div id="download-queue"></div><div id="offline-list">Завантаження…</div>';drawDownloads();
     const target=$('#offline-list');
     try{
       const rows=await offlineOperation('readonly','getAll');
@@ -310,11 +364,13 @@ async function renderFavorites(){
   loadVisibleItems(items);
   content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+(tab==='history'?'<button class="btn secondary" data-clear-history>Очистити історію</button>':'')+(items.length?posterGrid(items):'<div class="empty"><h2>Тут поки порожньо</h2></div>')+legalNotice();
 }
+const IPTV_REGIONS=["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UK","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","XK","YE","YT","ZA","ZM","ZW"];
+function countryOptions(){const names=new Intl.DisplayNames(['uk'],{type:'region'});return IPTV_REGIONS.map(c=>[c.toLowerCase(),names.of(c)]).sort((a,b)=>a[1].localeCompare(b[1],'uk')).map(([c,n])=>'<option value="'+c+'">'+safe(n)+'</option>').join('');}
 async function renderIptv() {
   const id=++state.loadId;
   content.innerHTML=`<div class="page-intro"><div><h1>IPTV</h1><p>Прямі трансляції з відкритих плейлистів iptv-org</p></div></div>
-    <div class="setting-control" style="margin-bottom:20px"><label for="iptv-country">Країна</label><select id="iptv-country" aria-label="Країна IPTV"><option value="ua">🇺🇦 Україна</option><option value="pl">🇵🇱 Польща</option><option value="gb">🇬🇧 Велика Британія</option><option value="us">🇺🇸 США</option><option value="de">🇩🇪 Німеччина</option></select></div>
-    <label class="search-box">${icon('search')}<input type="search" id="channel-search" value="${safe(state.channelQuery)}" placeholder="Знайти телеканал…" aria-label="Пошук телеканалів"></label><div id="iptv-results"><p class="muted">Завантажуємо канали…</p></div>${legalNotice()}`;
+    <div class="setting-control" style="margin-bottom:20px"><label for="iptv-country">Країна</label><select id="iptv-country" aria-label="Країна IPTV">${countryOptions()}</select></div>
+    <label class="search-box">${icon('search')}<input type="search" id="channel-search" value="${safe(state.channelQuery)}" placeholder="Знайти телеканал…" aria-label="Пошук телеканалів"></label><div class="setting-control"><label for="iptv-group">Жанр</label><select id="iptv-group"><option value="">Усі жанри</option></select><button type="button" class="btn secondary" data-iptv-favorites>${state.iptvOnlyFavorites?"Усі канали":"★ Вибране"}</button></div><div id="iptv-results"><p class="muted">Завантажуємо канали…</p></div>${legalNotice()}`;
   $('#iptv-country').value=state.iptvCountry;
   try {const result=await api(`/api/iptv?country=${state.iptvCountry}`);if(id!==state.loadId)return;state.channels=result.channels||[];paintChannels();}
   catch(e){if(id!==state.loadId)return;$('#iptv-results').innerHTML=`<div class="empty"><h2>Не вдалося завантажити IPTV</h2><p>${safe(e.message)}</p><button type="button" class="btn primary" data-refresh-iptv>Спробувати знову</button></div>`;}
@@ -322,11 +378,15 @@ async function renderIptv() {
 function paintChannels() {
   const target=$('#iptv-results');if(!target)return;
   const query=state.channelQuery.toLocaleLowerCase('uk');
-  const channels=state.channels.filter(c=>`${c.name} ${c.group}`.toLocaleLowerCase('uk').includes(query));
+  const list=state.iptvOnlyFavorites?Object.values(state.iptvFavorites):state.channels;
+  const groups=[...new Set(list.map(c=>c.group).filter(Boolean))].sort();
+  const select=$('#iptv-group');if(select){select.innerHTML='<option value="">Усі жанри</option>'+groups.map(g=>'<option value="'+safe(g)+'">'+safe(g)+'</option>').join('');if(groups.includes(state.iptvGroup))select.value=state.iptvGroup;else state.iptvGroup='';}
+  state.visibleChannels=list.filter(c=>(!state.iptvGroup||c.group===state.iptvGroup)&&`${c.name} ${c.group}`.toLocaleLowerCase('uk').includes(query));
+  const channels=state.visibleChannels;
   target.innerHTML=`<p class="section-note">${channels.length} каналів · деякі потоки можуть бути недоступні у Safari</p>
     ${channels.length?`<div class="channel-grid">${channels.map(c=>{
-      const index=state.channels.indexOf(c);const logo=externalImageUrl(c.logo);
-      return `<button type="button" class="channel-card" data-channel="${index}">${logo?`<img class="channel-logo" src="${safe(logo)}" loading="lazy" alt="">`:`<div class="channel-logo" style="display:grid;place-items:center;background:#303140;color:#d7c6ff">${icon('live')}</div>`}<div style="min-width:0;flex:1"><div class="channel-name">${safe(c.name)}</div><div class="channel-group">${safe(c.group||'Прямий ефір')}</div></div>${icon('play')}</button>`;
+      const index=channels.indexOf(c);const logo=externalImageUrl(c.logo);
+      return `<div class="channel-entry"><button type="button" class="channel-card" data-channel="${index}">${logo?`<img class="channel-logo" src="${safe(logo)}" loading="lazy" alt="">`:`<div class="channel-logo" style="display:grid;place-items:center;background:#303140;color:#d7c6ff">${icon('live')}</div>`}<div style="min-width:0;flex:1"><div class="channel-name">${safe(c.name)}</div><div class="channel-group">${safe(c.group||'Прямий ефір')}</div></div>${icon('play')}</button><button class="btn secondary" data-channel-favorite="${index}" aria-label="Вибране IPTV">${state.iptvFavorites[c.url]?'★':'☆'}</button></div>`;
     }).join('')}</div>`:'<div class="empty">За вашим запитом каналів не знайдено.</div>'}`;
 }
 async function renderSettings() {
@@ -343,7 +403,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.0 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.1 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
@@ -476,10 +536,12 @@ function cleanupPlayer() {
   if(state.hls){state.hls.destroy();state.hls=null;}
   if(state.wakeLock){state.wakeLock.release().catch(()=>{});state.wakeLock=null;}
   if(state.objectUrl){URL.revokeObjectURL(state.objectUrl);state.objectUrl=null;}
+  for(const url of state.subtitleUrls)URL.revokeObjectURL(url);state.subtitleUrls=[];
   const video=modal.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}
 }
 function openPlayer(item, presetUrl, localBlob=null) {
   cleanupPlayer();
+  if(state.downloadActive){const job=state.downloads.find(j=>j.id===state.downloadActive.id);if(job){job.status='queued';state.downloadActive.controller.abort();}}
   const key=keyFor(item);
   state.activePlayer={key,item,season:state.selectedSeason,episode:state.selectedEpisode};
   const storedUrl= presetUrl || state.sources[key] || '';
@@ -489,7 +551,7 @@ function openPlayer(item, presetUrl, localBlob=null) {
       <div class="switch-player-panel" id="switch-player-panel"><div class="switch-player-seek"><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
       <div class="switch-player-actions"><button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд">↶</button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Плей/пауза">▶</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд">↷</button></div><button type="button" class="switch-fullscreen" data-fullscreen>⛶ Повний екран</button></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
-    <div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Гучність <input type="range" id="player-volume" min="0" max="1" step="0.05" value="${state.playerVolume}"></label><label>Яскравість відео <input type="range" id="player-brightness" min="0.4" max="1.4" step="0.05" value="1"></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label><label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div>
+    <div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Гучність <input type="range" id="player-volume" min="0" max="1" step="0.05" value="${state.playerVolume}"></label><label>Яскравість відео <input type="range" id="player-brightness" min="0.4" max="1.4" step="0.05" value="1"></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label><label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div>
     <div class="player-help" id="player-help">${presetUrl?'Потік з джерела. Натисніть ▶, якщо Safari не дозволив автоматичний запуск.':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
     </section></div>`;
   const video=$('#video');
@@ -539,6 +601,20 @@ async function startPlayback(raw) {
   video.src=url.href;
   video.play().catch(()=>{if(help)help.textContent='Натисніть Play на відео, щоб почати відтворення.';});
 }
+async function addLocalSubtitle(file){
+  const v=$('#video');if(!v||!file)return;
+  if(file.size>2*1024*1024)return toast('Завеликий файл субтитрів');
+  try{
+    let data=(await file.text()).replace(/^\ufeff/,'').replace(/\r\n/g,'\n');
+    if(/\.srt$/i.test(file.name))data='WEBVTT\n\n'+data.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g,'$1.$2');
+    if(!/^WEBVTT\b/.test(data))throw Error('Підтримуються WebVTT і SRT');
+    if($('#video')!==v)return;
+    const url=URL.createObjectURL(new Blob([data],{type:'text/vtt'}));state.subtitleUrls.push(url);
+    const track=document.createElement('track');track.kind='subtitles';track.label=file.name;track.src=url;
+    track.addEventListener('load',()=>{Array.from(v.textTracks).forEach(t=>t.mode=t===track.track?'showing':'disabled');refreshMediaOptions();});
+    v.append(track);track.track.mode='hidden';refreshMediaOptions();
+  }catch(e){toast(e.message);}
+}
 function refreshMediaOptions(){
   const v=$('#video');if(!v)return;
   const h=state.hls;
@@ -565,7 +641,7 @@ async function stepEpisode(delta){
     if(provider&&!state.disabledProviders.includes(provider))loadProvider(provider);
   }catch(e){toast(e.message);}
 }
-function closeModal(){cleanupPlayer();modal.innerHTML='';state.activePlayer=null;}
+function closeModal(){cleanupPlayer();modal.innerHTML='';state.activePlayer=null;runDownloadQueue();}
 
 async function init() {
   applyAccent();buildNav();
@@ -583,6 +659,9 @@ document.addEventListener('error', event => { if (event.target instanceof HTMLIm
 document.addEventListener('click',async event=>{
   const action=event.target.closest('button, [data-close]');if(!action)return;
   if(action.matches('[data-close]')){if(event.target===action || action.matches('button'))closeModal();return;}
+  if(action.dataset.downloadPause){controlDownload(action.dataset.downloadPause,'pause');return;}
+  if(action.dataset.downloadResume){controlDownload(action.dataset.downloadResume,'resume');return;}
+  if(action.dataset.downloadCancel){controlDownload(action.dataset.downloadCancel,'cancel');return;}
   if(action.dataset.libraryTab){state.libraryTab=action.dataset.libraryTab;renderFavorites();return;}
   if(action.hasAttribute('data-clear-history')){if(confirm('Очистити історію і прогрес, зберігши вибране?')){state.history={};state.progress={};state.episodeProgress={};state.lastEpisode={};save();renderFavorites();}return;}
   if(action.dataset.markWatched){const item=state.lists[action.dataset.markWatched]||state.activeItem;if(item){state.history[keyFor(item)]={...item,watchedAt:Date.now(),completed:true};delete state.progress[keyFor(item)];save();drawDetails(item);}return;}
@@ -606,7 +685,9 @@ document.addEventListener('click',async event=>{
   if(action.dataset.seek){setPlayerControls(true,3000);const v=$('#video');if(v&&Number.isFinite(v.duration))v.currentTime=Math.min(v.duration,Math.max(0,v.currentTime+Number(action.dataset.seek)));return;}
   if(action.hasAttribute('data-fullscreen')){const v=$('#video');if(v){if(typeof v.webkitEnterFullscreen==='function')v.webkitEnterFullscreen();else if(v.requestFullscreen)v.requestFullscreen().catch(()=>{});}return;}
   if(action.dataset.player){const key=action.dataset.player;const item=state.lists[key]||state.activeItem;if(item)openPlayer(item);return;}
-  if(action.dataset.channel!==undefined){const c=state.channels[Number(action.dataset.channel)];if(c)openPlayer({id:Number(action.dataset.channel),type:'iptv',title:c.name},c.url);return;}
+  if(action.dataset.channelFavorite!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channelFavorite)];if(c){if(state.iptvFavorites[c.url])delete state.iptvFavorites[c.url];else state.iptvFavorites[c.url]=c;save();paintChannels();}return;}
+  if(action.hasAttribute('data-iptv-favorites')){state.iptvOnlyFavorites=!state.iptvOnlyFavorites;state.iptvGroup='';action.textContent=state.iptvOnlyFavorites?'Усі канали':'★ Вибране';paintChannels();return;}
+  if(action.dataset.channel!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channel)];if(c)openPlayer({id:Number(action.dataset.channel),type:'iptv',title:c.name},c.url);return;}
   if(action.hasAttribute('data-wallpapers')){openWallpapers();return;}
   if(action.dataset.setWallpaper){state.wallpaper=action.dataset.setWallpaper;save();applyWallpaper();closeModal();toast('Шпалери застосовано');return;}
   if(action.hasAttribute('data-wallpaper-reset')){state.wallpaper='';save();applyWallpaper();closeModal();toast('Стандартний фон');return;}
@@ -628,18 +709,22 @@ document.addEventListener('input',event=>{
 document.addEventListener('change',event=>{
   const el=event.target,v=$('#video');
   if(el.id==='catalog-sort'){state.sort=el.value;save();renderCategory(state.activeCategory);}
+  if(el.id==='iptv-group'){state.iptvGroup=el.value;paintChannels();}
   if(el.id==='offline-import')importOffline(el.files?.[0]);
   if(el.id==='player-rate'&&v){state.playerRate=Number(el.value);v.playbackRate=state.playerRate;}
   if(el.id==='player-volume'&&v){state.playerVolume=Number(el.value);try{v.volume=state.playerVolume;if(Math.abs(v.volume-state.playerVolume)>0.01)toast('На iPhone використовуйте системні кнопки гучності');}catch{}}
   if(el.id==='player-brightness'&&v)v.style.filter='brightness('+Number(el.value)+')';
   if(el.id==='player-quality'&&state.hls)state.hls.currentLevel=Number(el.value);
   if(el.id==='player-audio'&&v){const n=Number(el.value);if(n>=0){if(state.hls)state.hls.audioTrack=n;else Array.from(v.audioTracks||[]).forEach((t,i)=>{t.enabled=i===n;});}}
+  if(el.id==='local-subtitle')addLocalSubtitle(el.files?.[0]);
+  if(el.id==='subtitle-size'&&v)v.style.setProperty('--cue-size',Number(el.value)+'%');
   if(el.id==='player-track'&&v){const n=Number(el.value);if(state.hls?.subtitleTracks?.length)state.hls.subtitleTrack=n;else Array.from(v.textTracks||[]).forEach((t,i)=>{t.mode=i===n?'showing':'disabled';});}
   if(event.target.id==='iptv-country'){state.iptvCountry=event.target.value;state.channelQuery='';renderIptv();}
   if(event.target.id==='season-select'){state.selectedSeason=Number(event.target.value);state.selectedEpisode=1;loadSeason(event.target.value);}
   if(event.target.id==='video-seek'){const v=$('#video');if(v&&Number.isFinite(v.duration))v.currentTime=Number(event.target.value)||0;}
 });
 document.addEventListener('submit',event=>{
+  if(event.target.id==='offline-download-form'){event.preventDefault();enqueueDownload($('#offline-url').value);}
   if(event.target.id==='stream-form'){event.preventDefault();startPlayback($('#stream-url').value.trim());}
   if(event.target.id==='wallpaper-form'){event.preventDefault();loadWallpapers($('#wallpaper-query')?.value||'');}
 });
