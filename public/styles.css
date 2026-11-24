@@ -193,3 +193,11 @@ html[data-view=home] .main-shell{height:100%;min-height:0;overflow:hidden!import
 html[data-view=home] #app-content{overflow:hidden!important;overscroll-behavior:none}
 html[data-view=home] #home-rail,html[data-view=home] .header-nav{touch-action:pan-x;overscroll-behavior-x:contain;overscroll-behavior-y:none}
 html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!important}
+
+/* v0.5.18: opaque native iOS status bar, no overlapping web header. */
+@media (display-mode: standalone) and (max-width:760px){
+  .topbar{padding-top:12px;backdrop-filter:none;-webkit-backdrop-filter:none;filter:none}
+  .topbar:before{display:none}
+  .switch-screen,.switch-detail-screen{padding-top:0}
+}
+.topbar,.topbar .brand,.topbar-actions,.header-nav{filter:none;backdrop-filter:none;-webkit-backdrop-filter:none}
