@@ -111,3 +111,33 @@ test('AnimeON rejects unconfigured frame origin and opaque file',()=>{
  const out=normalizeAnimeMedia('animeon',{players:[{json:JSON.stringify([{title:'Серія 1',file:'#2opaque'},{title:'Серія 2',videoUrl:'https://evil.example/iframe'}])}]});
  assert.equal(out.streams.length,0);assert.equal(out.playerEmbeds.length,0);
 });
+
+test('UAKino loads separate same-origin public playlist for a catalogue article',async()=>{
+  const calls=[];
+  const result=await resolveProviderMedia('uakino','https://uakino.eu/films/123-sample.html',async url=>{
+    calls.push(url);
+    if(url.includes('playlists.php'))return Response.json({response:'<li data-file="https://ashdi.vip/embed/sample" data-voice="Studio">Сезон 1 Серія 2</li>'});
+    if(url.includes('ashdi.vip'))return new Response('<html>Public player</html>');
+    return new Response('<html>Article</html>');
+  });
+  assert.equal(calls[1],'https://uakino.eu/engine/ajax/playlists.php?news_id=123&xfield=playlist');
+  assert.equal(result.playerEmbeds[0].episode,2);
+  assert.equal(result.playerEmbeds[0].season,1);
+  assert.equal(result.mediaStatus,'available');
+});
+test('UAKino playlist access denial does not trigger requests to alternate origins',async()=>{
+ const calls=[];
+ const result=await resolveProviderMedia('uakino','https://uakino.eu/films/123-sample.html',async url=>{
+   calls.push(url);
+   return url.includes('playlists.php')?new Response('',{status:403}):new Response('<html>Article</html>');
+ });
+ assert.equal(calls.length,2);assert.equal(result.mediaStatus,'access_denied');assert.deepEqual(result.playerEmbeds,[]);
+});
+test('UAKino playlist honors player framing headers',async()=>{
+ const result=await resolveProviderMedia('uakino','https://uakino.eu/films/123-sample.html',async url=>{
+  if(url.includes('playlists.php'))return Response.json({response:'<li data-file="https://ashdi.vip/embed/sample">Film</li>'});
+  if(url.includes('ashdi.vip'))return new Response('Player',{headers:{'X-Frame-Options':'DENY'}});
+  return new Response('Article');
+ });
+ assert.deepEqual(result.playerEmbeds,[]);
+});

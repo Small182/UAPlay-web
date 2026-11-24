@@ -231,6 +231,33 @@ export function normalizeAnimeMedia(provider,payload){
   }
   return {streams,episodes,playerEmbeds,mediaStatus:streams.length||playerEmbeds.length?'available':'no_public_media'};
 }
+// UAKino's catalogue article exposes a separate public playlist endpoint.
+// Keep the request on the original article origin; never switch hosts after a denial.
+function uakinoPlaylistUrl(page){
+  const u=new URL(page);
+  if(u.origin!=='https://uakino.eu')return null;
+  const id=u.pathname.match(/\/(\d{1,10})-[^/]+\.html$/i)?.[1];
+  if(!id||Number(id)<1)return null;
+  const endpoint=new URL('/engine/ajax/playlists.php',u.origin);
+  endpoint.searchParams.set('news_id',id);
+  endpoint.searchParams.set('xfield','playlist');
+  return endpoint.href;
+}
+function uakinoPlaylistFrames(html,base){
+  const frames=[];
+  for(const match of String(html||'').matchAll(/<li\b([^>]*)>([\s\S]*?)<\/li>/gi)){
+    const attrs=match[1];
+    const raw=attrs.match(/\bdata-file\s*=\s*(["'])(.*?)\1/i)?.[2];
+    const url=parseHttpsLink(raw,base,true);
+    if(!url||!FRAME_PLAYER_HOSTS.has(url.hostname)||validMedia(url.href,base))continue;
+    const voice=cappedLabel(decodeMarkup(attrs.match(/\bdata-voice\s*=\s*(["'])(.*?)\1/i)?.[2]||''));
+    const title=cappedLabel(decodeMarkup(match[2]));
+    const season=Number(title.match(/(?:сезон|season)\s*(\d+)/i)?.[1])||0;
+    const episode=Number(title.match(/(?:серія|episode|епізод)\s*(\d+)/i)?.[1])||0;
+    frames.push({url:url.href,label:[title,voice].filter(Boolean).join(' · ')||'Вбудований плеєр',season,episode});
+  }
+  return frames.slice(0,80);
+}
 export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const host=VIDEO_PROVIDERS[provider];if(!host)throw Object.assign(new Error('Невідоме джерело'),{status:400});
   let page;
@@ -251,8 +278,30 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const availability=availabilityNotice(content);
   if(availability?.status==='access_denied')return {provider,streams:[],episodes:[],sourcePage:page,mediaStatus:availability.status,warnings:[{status:403,message:availability.message}]};
   const start=parseMediaDocument(content,page);
-  const frameCandidates= ['uafilm','uaflix'].includes(provider)&&!availability?publicPlayerFrames(content,page):[];
+  const frameCandidates= ['uafilm','uaflix','uakino'].includes(provider)&&!availability?publicPlayerFrames(content,page):[];
+  const playlistFrames=[];
   const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[],embedCount:start.embeds.length,playerEmbeds:[]};
+  if(provider==='uakino'&&!availability){
+    const endpoint=uakinoPlaylistUrl(page);
+    if(endpoint){
+      try{
+        const playlist=await getResponse(endpoint,null,fetcher);
+        const payload=JSON.parse(playlist.text);
+        const html=typeof payload?.response==='string'?payload.response:'';
+        const notice=availabilityNotice(html);
+        if(notice?.status==='access_denied')return {provider,streams:[],episodes:[],playerEmbeds:[],sourcePage:page,mediaStatus:'access_denied',warnings:[{status:403,message:notice.message}]};
+        if(!notice){
+          const parsed=parseMediaDocument(html,page);
+          result.streams.push(...parsed.streams);result.episodes.push(...parsed.episodes);
+          playlistFrames.push(...uakinoPlaylistFrames(html,page));
+          frameCandidates.push(...publicPlayerFrames(html,page),...playlistFrames.map(x=>x.url));
+        }
+      }catch(e){
+        result.warnings.push({status:e.upstreamStatus||0,message:e.message});
+        if([401,403,451].includes(e.upstreamStatus))return {...result,streams:[],episodes:[],playerEmbeds:[],mediaStatus:'access_denied'};
+      }
+    }
+  }
   const pending=[...new Set([...start.embeds,...frameCandidates])].map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
   // Follow at most five explicit iframe links and two levels, never arbitrary URLs.
   while(pending.length && visited.size<6){
@@ -261,16 +310,21 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
       const html=await getResponse(next.url,next.from,fetcher);
       const parsed=parseMediaDocument(html.text,html.url);
       if(frameCandidates.includes(next.url)&&FRAME_PLAYER_HOSTS.has(new URL(html.url).hostname)&&!availabilityNotice(html.text)&&frameHeadersPermit(html.headers)){
-        result.playerEmbeds.push({url:html.url,label:'Вбудований плеєр '+(result.playerEmbeds.length+1)});
+        const labels=playlistFrames.filter(x=>x.url===next.url);
+        if(labels.length)result.playerEmbeds.push(...labels.map(x=>({...x,url:html.url})));
+        else result.playerEmbeds.push({url:html.url,label:'Вбудований плеєр '+(result.playerEmbeds.length+1)});
       }
-      result.streams.push(...parsed.streams);result.episodes.push(...parsed.episodes);
+      const frameLabels=playlistFrames.filter(x=>x.url===next.url);
+      if(frameLabels.length){
+        for(const label of frameLabels)for(const stream of parsed.streams){const entry={...stream,label:label.label,season:label.season,episode:label.episode};result.streams.push(entry);if(entry.episode||entry.season)result.episodes.push(entry);}
+      }else{result.streams.push(...parsed.streams);result.episodes.push(...parsed.episodes);}
       if(next.depth<2)pending.push(...parsed.embeds.map(url=>({url,depth:next.depth+1,from:next.url})));
     }catch(e){if(result.warnings.length<5)result.warnings.push({status:e.upstreamStatus||0,message:e.message});}
     if(result.streams.length>=50)break;
   }
   result.streams=uniqueItems(result.streams).slice(0,50);
   result.episodes=uniqueItems(result.episodes).slice(0,80);
-  result.mediaStatus=result.streams.length?'available':result.warnings.some(w=>[401,403,451].includes(w.status))?'access_denied':result.warnings.length?'upstream_error':result.embedCount?'no_supported_media':'no_public_media';
+  result.mediaStatus=(result.streams.length||result.playerEmbeds.length)?'available':result.warnings.some(w=>[401,403,451].includes(w.status))?'access_denied':result.warnings.length?'upstream_error':result.embedCount?'no_supported_media':'no_public_media';
   if(result.mediaStatus==='access_denied'||availability)result.playerEmbeds=[];
   if(!result.streams.length&&availability){result.mediaStatus=availability.status;result.warnings.unshift({status:0,message:availability.message});}
   return result;

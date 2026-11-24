@@ -23,3 +23,9 @@ test('anime providers accept configured public player origin only',()=>{
  assert.equal(playerFrameUrl('animeon','https://moonanime.art/iframe/example'),'https://moonanime.art/iframe/example');
  assert.equal(playerFrameUrl('mikai','https://evil.example/'),null);
 });
+
+test('UAKino accepts configured player origins, not arbitrary pages',()=>{
+ assert.equal(playerFrameUrl('uakino','https://ashdi.vip/embed/sample'),'https://ashdi.vip/embed/sample');
+ assert.equal(playerFrameUrl('uakino','https://uakino.eu/films/123-sample.html'),null);
+ assert.equal(playerFrameUrl('uakino','https://evil.example/player'),null);
+});
