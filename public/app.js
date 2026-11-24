@@ -1,5 +1,6 @@
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
 import { episodeChoices, providerEpisodeFrames } from './episode-choices.js';
+import { voiceChoices, preferredVoiceIndex, voiceResumeTime } from './voice-choices.js';
 const $ = selector => document.querySelector(selector);
 const content = $('#app-content');
 const modal = $('#modal-root');
@@ -37,7 +38,7 @@ const readStore = () => { try { return JSON.parse(localStorage.getItem(STORE) ||
 const persisted = readStore();
 const state = {
   view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
-  searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {},
+  searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {}, voicePreferences:persisted.voicePreferences || {}, groupedVoices:null,
   history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
   searchTimer:0, toastTimer:0, playerControlsTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
 };
@@ -47,7 +48,7 @@ const year = item => String(item.date || '').slice(0,4) || '—';
 const imageUrl = (path, size = 'w500') => /^\/[\w-]+\.(?:jpg|png|webp)$/i.test(path || '') ? `https://image.tmdb.org/t/p/${size}${path}` : '';
 const externalImageUrl = url => { try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.href : ''; } catch { return ''; } };
 const unique = values => [...new Map(values.map(item => [keyFor(item),item])).values()];
-function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
+function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, voicePreferences:state.voicePreferences, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
 function notify(message) { clearTimeout(state.toastTimer);toastBox.textContent=message;toastBox.classList.add('show');state.toastTimer=setTimeout(()=>toastBox.classList.remove('show'),3000); }
 const toast = notify;
 function applyAccent() {
@@ -434,7 +435,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.26 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.27 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
@@ -503,7 +504,7 @@ function switchScreen(title,body,back='close'){
   </section></div>`;
 }
 function showSources(item){
-  cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';state.sourceResults=[];state.activeSource=null;
+  cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';state.sourceResults=[];state.activeSource=null;state.groupedVoices=null;
   const extra=item.type==='tv'?`<p class="switch-subtitle">${safe(item.title)} · Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}</p>`:'';
   modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
 `,item.type==='tv'?'episodes':'close');
@@ -577,9 +578,11 @@ function renderStreamChoices(data){
   const isTV=state.activeItem?.type==='tv';
   const matching=isTV?episodeChoices(data,{season:state.selectedSeason,episode:state.selectedEpisode,sourceSeason:source.season||0}):null;
   const choices=isTV?matching.selected:streams;
+  const voices=voiceChoices(source.provider,isTV,choices);
+  state.groupedVoices=voices.length?{source,season:state.selectedSeason,episode:state.selectedEpisode,rows:voices}:null;
   const unverified=[]; // Never present a full unlabeled list as the selected episode.
   const emptyMessage=data.mediaStatus==='licensed'?'Mikai не надає плеєр для цього ліцензованого аніме.':(episodes.length&&streams.length)||data.playerEmbeds?.some(p=>p.episode)?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
-  const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):(isTV?`Варіант ${i+1}${stream.voice&&stream.voice!==stream.label?' · '+stream.voice:''}`:stream.label||stream.voice||`Варіант ${i+1}`))} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
+  const list=voices.length?`<button type="button" class="switch-row" data-voice-group><span class="row-index">1.</span><span>Відтворити${voices.length>1?` · Озвучень: ${voices.length}`:''}</span><span class="row-trailing">▶</span></button>`:choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):(isTV?`Варіант ${i+1}${stream.voice&&stream.voice!==stream.label?' · '+stream.voice:''}`:stream.label||stream.voice||`Варіант ${i+1}`))} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const unknownList=unverified.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>Варіант ${i+1} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const frames=(isTV?providerEpisodeFrames(source.provider,data,matching): (Array.isArray(data.playerEmbeds)?data.playerEmbeds:[])).map(p=>({url:playerFrameUrl(source.provider,p.url),label:p.label})).filter(p=>p.url);
   state.playerEmbeds=frames.map(p=>p.url);
@@ -624,11 +627,11 @@ function cleanupPlayer() {
   for(const url of state.subtitleUrls)URL.revokeObjectURL(url);state.subtitleUrls=[];
   const video=modal.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}
 }
-function openPlayer(item, presetUrl, localBlob=null) {
+function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
   cleanupPlayer();
   if(state.downloadActive){const job=state.downloads.find(j=>j.id===state.downloadActive.id);if(job){job.status='queued';state.downloadActive.controller.abort();}}
   const key=keyFor(item);
-  state.activePlayer={key,item,season:state.selectedSeason,episode:state.selectedEpisode};
+  state.activePlayer={key,item,season:state.selectedSeason,episode:state.selectedEpisode,voiceGroup,playAttempt:null};
   const storedUrl= presetUrl || state.sources[key] || '';
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="player-modal" role="dialog" aria-modal="true" aria-label="Плеєр">
     <div class="player-top"><h2>${safe(item.title)}</h2><button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button></div>
@@ -636,7 +639,7 @@ function openPlayer(item, presetUrl, localBlob=null) {
       <div class="switch-player-panel" id="switch-player-panel"><div class="switch-player-seek"><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
       <div class="switch-player-actions"><button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд">↶</button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Плей/пауза">▶</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд">↷</button></div><button type="button" class="switch-fullscreen" data-fullscreen>⛶ Повний екран</button></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
-    <div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Гучність <input type="range" id="player-volume" min="0" max="1" step="0.05" value="${state.playerVolume}"></label><label>Яскравість відео <input type="range" id="player-brightness" min="0.4" max="1.4" step="0.05" value="1"></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label><label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div>
+    <div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Гучність <input type="range" id="player-volume" min="0" max="1" step="0.05" value="${state.playerVolume}"></label><label>Яскравість відео <input type="range" id="player-brightness" min="0.4" max="1.4" step="0.05" value="1"></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div>
     <div class="player-help" id="player-help">${presetUrl?'Потік з джерела. Натисніть ▶, якщо Safari не дозволив автоматичний запуск.':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
     </section></div>`;
   const video=$('#video');
@@ -656,35 +659,62 @@ function openPlayer(item, presetUrl, localBlob=null) {
     const hidden=video.closest('.player-frame')?.classList.contains('controls-hidden');
     setPlayerControls(Boolean(hidden),hidden?3000:0);
   });
-  video.addEventListener('loadedmetadata' ,()=>{const seconds=(item.type==='tv'?state.episodeProgress[episodeKey(item,state.activePlayer.season,state.activePlayer.episode)]:state.progress[key])||0;if(seconds>10&&Number.isFinite(video.duration)&&seconds<video.duration-15)video.currentTime=seconds;});
+  video.addEventListener('loadedmetadata',()=>{
+    const player=state.activePlayer;if($('#video')!==video||!player)return;
+    const attempt=player.playAttempt;
+    if(attempt?.resumeAt!==null&&attempt?.resumeAt!==undefined){
+      const position=voiceResumeTime(attempt.resumeAt,video.duration);
+      try{video.currentTime=position;}catch{}
+      attempt.resumeAt=null;attempt.switching=false;attempt.restored=true;
+      if(attempt.autoplay)video.play().catch(()=>{});else video.pause();
+      return;
+    }
+    if(attempt?.restored)return;
+    if(attempt)attempt.restored=true;
+    const seconds=(item.type==='tv'?state.episodeProgress[episodeKey(item,player.season,player.episode)]:state.progress[key])||0;
+    if(seconds>10&&Number.isFinite(video.duration)&&seconds<video.duration-15)video.currentTime=seconds;
+  });
   let lastSave=0;
-  video.addEventListener('timeupdate',()=>{if(Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();rememberPlayback(item,Math.floor(video.currentTime));}});
+  video.addEventListener('timeupdate',()=>{if($('#video')===video&&!state.activePlayer?.playAttempt?.switching&&Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();rememberPlayback(item,Math.floor(video.currentTime));}});
   video.addEventListener('ended',()=>{rememberPlayback(item,0,true);});
   video.addEventListener('error',()=>{const help=$('#player-help');if(help)help.textContent='Не вдалося відтворити потік. Перевірте кодек, доступність адреси, CORS або обмеження джерела.';});
   if(localBlob){state.objectUrl=URL.createObjectURL(localBlob);video.src=state.objectUrl;video.play().catch(()=>{});}else if(presetUrl)startPlayback(presetUrl); // Browsers may require tapping Play in their native controls.
 }
-async function startPlayback(raw) {
+async function startPlayback(raw,{resumeAt=null,autoplay=true}={}) {
   const video=$('#video');if(!video)return;
   let url;
   try {url=new URL(raw);if(url.protocol!=='https:')throw new Error();}catch{toast('Потрібне пряме HTTPS-посилання на відео');return;}
-  if(!state.activePlayer?.key?.startsWith('iptv:')){state.sources[state.activePlayer.key]=url.href;save();}
+  const player=state.activePlayer;if(!player)return;
+  const attempt={resumeAt,autoplay,switching:resumeAt!==null,restored:false};player.playAttempt=attempt;
+  const current=()=>$('#video')===video&&state.activePlayer===player&&player.playAttempt===attempt;
+  if(!player.key.startsWith('iptv:')){state.sources[player.key]=url.href;save();}
   if(state.hls){state.hls.destroy();state.hls=null;}
+  if(attempt.switching){video.pause();video.removeAttribute('src');video.load();for(const id of ['#player-quality','#player-audio']){const el=$(id);if(el)el.value='-1';}}
   const isHls=/\.m3u8(?:$|[?#])/i.test(url.pathname+url.search);
   const help=$('#player-help');
   if(isHls && !video.canPlayType('application/vnd.apple.mpegurl')){
     if(help)help.textContent='Підключаємо HLS для браузера…';
     try {
       const { default:Hls }=await import('https://cdn.jsdelivr.net/npm/hls.js@1.6.14/+esm');
-      if(!$('#video')||$('#video')!==video)return;
+      if(!current())return;
       if(!Hls.isSupported())throw new Error('HLS не підтримується браузером');
       const hls=new Hls({enableWorker:true});state.hls=hls;hls.loadSource(url.href);hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED,()=>{refreshMediaOptions();video.play().catch(()=>{if(help)help.textContent='Натисніть Play для початку перегляду.';});});
-      hls.on(Hls.Events.ERROR,(_e,data)=>{if(data.fatal&&help)help.textContent='Помилка HLS-потоку. Можливо, джерело блокує CORS або доступ.';});
+      hls.on(Hls.Events.MANIFEST_PARSED,()=>{if(!current())return;refreshMediaOptions();if(autoplay&&!attempt.switching)video.play().catch(()=>{if(help)help.textContent='Натисніть Play для початку перегляду.';});});
+      hls.on(Hls.Events.ERROR,(_e,data)=>{if(current()&&data.fatal&&help)help.textContent='Помилка HLS-потоку. Можливо, джерело блокує CORS або доступ.';});
       return;
-    } catch(e){if(help)help.textContent='Цей браузер не підтримує потік HLS без додаткового модуля. Спробуйте Safari на iOS або MP4.';return;}
+    } catch(e){if(current()&&help)help.textContent='Цей браузер не підтримує потік HLS без додаткового модуля. Спробуйте Safari на iOS або MP4.';return;}
   }
   video.src=url.href;
-  video.play().catch(()=>{if(help)help.textContent='Натисніть Play на відео, щоб почати відтворення.';});
+  if(autoplay&&!attempt.switching)video.play().catch(()=>{if(current()&&help)help.textContent='Натисніть Play на відео, щоб почати відтворення.';});
+}
+function switchPlayerVoice(index){
+  const video=$('#video'),player=state.activePlayer,group=player?.voiceGroup;
+  if(!video||!group||!Number.isInteger(index)||!group.rows[index]||index===group.index)return;
+  const pending=player.playAttempt;
+  const position=pending?.switching?pending.resumeAt:video.currentTime;
+  const autoplay=pending?.switching?pending.autoplay:!video.paused;
+  group.index=index;state.voicePreferences[group.prefKey]=group.rows[index].key;save();
+  startPlayback(group.rows[index].url,{resumeAt:Number.isFinite(position)?position:0,autoplay});
 }
 async function addLocalSubtitle(file){
   const v=$('#video');if(!v||!file)return;
@@ -770,6 +800,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.embedProvider){openEmbeddedPlayer(action.dataset.embedProvider,action.dataset.embedUrl);return;}
   if(action.dataset.providerFrame){openProviderFrame(action.dataset.providerFrame,action.dataset.frameUrl);return;}
   if(action.dataset.mediaProvider){playProviderMedia(action.dataset.mediaProvider,action.dataset.mediaId);return;}
+  if(action.hasAttribute('data-voice-group')){const group=state.groupedVoices,item=state.activeItem;if(item&&group&&group.source===state.activeSource&&group.season===state.selectedSeason&&group.episode===state.selectedEpisode){const prefKey=keyFor(item)+':'+group.source.provider;const index=preferredVoiceIndex(group.rows,state.voicePreferences[prefKey]);openPlayer(item,group.rows[index].url,null,{rows:group.rows,index,prefKey});}return;}
   if(action.dataset.streamUrl){if(state.activeItem)openPlayer(state.activeItem,action.dataset.streamUrl);return;}
   if(action.dataset.episode){state.selectedEpisode=Number(action.dataset.episode)||1;showSources(state.activeItem);return;}
   if(action.hasAttribute('data-toggle-play')){setPlayerControls(true,3000);const v=$('#video');if(v){if(v.paused)v.play().catch(()=>toast('Не вдалося запустити відео'));else v.pause();}return;}
@@ -802,6 +833,7 @@ document.addEventListener('change',event=>{
   if(el.id==='catalog-sort'){state.sort=el.value;save();renderCategory(state.activeCategory);}
   if(el.id==='iptv-group'){state.iptvGroup=el.value;paintChannels();}
   if(el.id==='offline-import')importOffline(el.files?.[0]);
+  if(el.id==='player-voice'&&v)switchPlayerVoice(Number(el.value));
   if(el.id==='player-rate'&&v){state.playerRate=Number(el.value);v.playbackRate=state.playerRate;}
   if(el.id==='player-volume'&&v){state.playerVolume=Number(el.value);try{v.volume=state.playerVolume;if(Math.abs(v.volume-state.playerVolume)>0.01)toast('На iPhone використовуйте системні кнопки гучності');}catch{}}
   if(el.id==='player-brightness'&&v)v.style.filter='brightness('+Number(el.value)+')';
