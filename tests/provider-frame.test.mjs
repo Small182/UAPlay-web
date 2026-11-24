@@ -14,7 +14,7 @@ test('only configured public player origins are accepted',()=>{
   assert.equal(playerFrameUrl('uafilm','https://ashdi.vip/embed/example'),'https://ashdi.vip/embed/example');
   assert.equal(playerFrameUrl('uafilm','https://klonua.com/film.html'),null);
   assert.equal(playerFrameUrl('uafilm','https://ashdi.vip.evil.example/'),null);
-  assert.equal(playerFrameUrl('uaserials','https://ashdi.vip/embed/example'),'https://ashdi.vip/embed/example');
+  assert.equal(playerFrameUrl('uaserials','https://ashdi.vip/embed/example'),null);
 });
 
 test('anime providers accept configured public player origin only',()=>{

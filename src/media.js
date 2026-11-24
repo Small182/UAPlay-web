@@ -252,7 +252,7 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const availability=availabilityNotice(content);
   if(availability?.status==='access_denied')return {provider,streams:[],episodes:[],sourcePage:page,mediaStatus:availability.status,warnings:[{status:403,message:availability.message}]};
   const start=parseMediaDocument(content,page);
-  const frameCandidates= ['uafilm','uaserials','eneyida'].includes(provider)&&!availability?publicPlayerFrames(content,page):[];
+  const frameCandidates= provider==='uafilm'&&!availability?publicPlayerFrames(content,page):[];
   const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[],embedCount:start.embeds.length,playerEmbeds:[]};
   const pending=[...new Set([...start.embeds,...frameCandidates])].map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
   // Follow at most five explicit iframe links and two levels, never arbitrary URLs.

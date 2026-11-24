@@ -127,7 +127,7 @@ test('episode-first and data attribute labels retain episode identity',()=>{
  assert.equal(out.episodes[1].season,2);
  assert.equal(out.episodes[1].episode,4);
 });
-test('public UASerials iframe may be offered without direct media',async()=>{
+test('generic UASerials iframe does not substitute for an episode',async()=>{
  const result=await resolveProviderMedia('uaserials','https://uaserials.my/1-show.html',async url=>new Response(url.includes('uaserials.my')?'<iframe src="https://ashdi.vip/embed/sample"></iframe>':'<html>Public player</html>'));
- assert.equal(result.playerEmbeds.length,1);
+ assert.equal(result.playerEmbeds.length,0);
 });

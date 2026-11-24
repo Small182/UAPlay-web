@@ -1,5 +1,5 @@
-const CACHE = 'uaplay-shell-v0.5.19';
-const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/provider-frame.js', '/manifest.webmanifest', '/icons/icon.svg', '/data/demo.json'];
+const CACHE = 'uaplay-shell-v0.5.20';
+const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/provider-frame.js', '/episode-choices.js', '/manifest.webmanifest', '/icons/icon.svg', '/data/demo.json'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
