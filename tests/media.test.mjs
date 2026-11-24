@@ -69,3 +69,13 @@ test('empty video document has explicit media status',async()=>{
   const out=await resolveProviderMedia('uafilm','https://klonua.com/test',async()=>new Response('<html><h1>Test</h1></html>'));
   assert.equal(out.mediaStatus,'no_public_media');
 });
+
+test('explicit login requirement is reported without further requests',async()=>{
+  let calls=0;
+  const out=await resolveProviderMedia('uaflix','https://uafix.net/films/test/',async()=>{calls++;return new Response('<p>Пройдіть авторизацію</p><iframe src="https://ashdi.vip/example"></iframe>');});
+  assert.equal(out.mediaStatus,'access_denied');assert.equal(out.streams.length,0);assert.equal(calls,1);
+});
+test('removed content gets distinct availability status',async()=>{
+  const out=await resolveProviderMedia('uafilm','https://klonua.com/test',async()=>new Response('<p>Контент недоступний</p>'));
+  assert.equal(out.mediaStatus,'removed');
+});

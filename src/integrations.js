@@ -67,13 +67,31 @@ function articleLink(provider,value,type=''){
   }
   return url.href;
 }
+// Catalogue matching informed by the supplied UAFresh 82ff45d plugin.
+// Independent implementation; no third-party script, proxy or session data.
 function normalizedTitle(s){
-  return String(s||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  return String(s||'').normalize('NFKC').toLowerCase().replace(/[ʼ’'‘\x60]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 }
-function rankSources(results,local,original='',strict=false){
-  const a=normalizedTitle(local),b=normalizedTitle(original);
-  const score=(x)=>Math.max(0,...String(x.title||'').split('/').map(part=>{
-    const n=normalizedTitle(part);
+function baseCatalogueTitle(s){
+  return normalizedTitle(s).replace(/\s+(?:(?:season|сезон|sezon)\s+\d+|\d+\s+(?:season|сезон|sezon))(?:\s.*)?$/i,'')
+    .replace(/\s+(?:онлайн|дивитися|дивитись|watch)(?:\s.*)?$/i,'')
+    .replace(/\b(?:19|20)\d{2}\b/g,' ').replace(/\s+/g,' ').trim();
+}
+function catalogueYear(title,url){
+  const explicit=String(title||'').match(/\(((?:19|20)\d{2})\)/);
+  const path=String(url||'').match(/[-_/]((?:19|20)\d{2})(?:[-_.][a-z]*)?\.html$/i);
+  return Number(explicit?.[1]||path?.[1])||null;
+}
+function catalogueSeason(title){
+  const s=String(title||'');
+  if(/\d+\s*[-–]\s*\d+\s*(?:сезон|season)/i.test(s))return null;
+  const match=s.match(/(?:season|сезон|sezon)[\s_-]*(\d{1,3})|(\d{1,3})[\s_-]*(?:season|сезон|sezon)/i);
+  return Number(match?.[1]||match?.[2])||null;
+}
+function rankSources(results,local,original='',strict=false,year=0,type=''){
+  const a=baseCatalogueTitle(local),b=baseCatalogueTitle(original);
+  const score=(x)=>Math.max(0,...[...String(x.title||'').split('/'),x.original||''].map(part=>{
+    const n=baseCatalogueTitle(part);
     if(!n)return 0;
     if(a&&n===a)return 120;
     if(b&&n===b)return 110;
@@ -83,9 +101,16 @@ function rankSources(results,local,original='',strict=false){
     if(b.length>=6&&n.includes(b))return 28;
     return 0;
   }));
-  const ranked=results.map(item=>({item,score:score(item)})).sort((x,y)=>y.score-x.score);
+  const ranked=results.map(item=>({item,score:score(item),year:catalogueYear(item.title,item.url),season:catalogueSeason(item.title)})).sort((x,y)=>y.score-x.score);
   const top=ranked[0]?.score||0;
-  return ranked.filter(x=>top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true).map(x=>x.item);
+  let relevant=ranked.filter(x=>top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true);
+  if(year>=1900){
+    const compatible=x=>!x.year||(type==='tv'&&x.season>1?x.year>=year-1:Math.abs(x.year-year)<=1);
+    if(relevant.some(x=>x.year&&compatible(x)))relevant=relevant.filter(compatible);
+    else if(strict&&type==='movie')relevant=relevant.filter(compatible);
+    relevant.sort((x,y)=>Number(!!y.year&&compatible(y))-Number(!!x.year&&compatible(x))||y.score-x.score);
+  }
+  return relevant.map(x=>({...x.item,year:x.year,season:x.season}));
 }
 function parseHtmlSearch(provider,html,type='') {
   const conf=PROVIDERS[provider];if(!conf)return [];
@@ -148,7 +173,8 @@ async function providerSearch(params) {
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
     results=normalizeAnime(provider,payload);
   }else results=parseHtmlSearch(provider,body,type);
-  results=rankSources(results,query,original,provider==='uafilm').slice(0,18);
+  const year=Number(params.get('year'))||0;
+  results=rankSources(results,query,original,provider==='uafilm',year,type).slice(0,18);
   return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,60);
 }
 async function providerMedia(params) {

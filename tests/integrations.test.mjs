@@ -91,3 +91,21 @@ test('UAFilm search excludes entirely unrelated titles',async()=>{
     assert.equal(response.status,200);assert.deepEqual((await response.json()).results,[]);
   });
 });
+
+test('catalogue matching normalizes season suffix and release year',async()=>{
+  const html='<a href="/111-sample.html"><span class="th-title">Test show 2 сезон (2025)</span></a><a href="/123-other.html"><span class="th-title">Other show</span></a>';
+  await withMockFetch(async()=>new Response(html),async()=>{
+    const response=await handleIntegration(req('/api/providers/search?provider=uaserials&q=Test%20show&type=tv&year=2022'),{});
+    assert.equal(response.status,200);
+    const items=(await response.json()).results;
+    assert.equal(items.length,1);assert.equal(items[0].season,2);assert.equal(items[0].year,2025);
+  });
+});
+test('same-name movie with matching release year outranks wrong remake',async()=>{
+  const html='<a class="card-link__text" href="/filmy/1-sample.html">Sample (1999)</a><a class="card-link__text" href="/filmy/2-sample.html">Sample (2025)</a>';
+  await withMockFetch(async()=>new Response(html),async()=>{
+    const response=await handleIntegration(req('/api/providers/search?provider=uafilm&q=Sample&type=movie&year=2025'),{});
+    const items=(await response.json()).results;
+    assert.equal(items.length,1);assert.equal(items[0].year,2025);
+  });
+});

@@ -147,6 +147,16 @@ async function getResponse(url,referrer,fetcher){
   if(referrer){try{const r=new URL(referrer);if(EMBED_HOSTS.has(r.hostname))headers.Referer=r.origin+'/';}catch{}}
   return providerRequest(url,{headers},fetcher);
 }
+// Classify explicit page-level availability notices, never reroute access denials.
+function availabilityNotice(html){
+  const body=String(html||'').slice(0,1800000);
+  const visible=body.replace(/<(?:script|style)\b[^>]*>[\s\S]*?<\/(?:script|style)>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+  if(/пройдіть\s+авторизацію|змініть\s+країну|увійдіть,?\s+щоб\s+дивитис|доступн\p{L}*\s+лише\s+(?:для\s+)?зареєстрован/iu.test(visible))
+    return {status:'access_denied',message:'Сторінка вимагає входу або повідомляє про територіальні обмеження. Перевірте доступ на сайті джерела.'};
+  if(/контент недоступний|відео видалено|файл не знайдено|video not found|file not found/i.test(visible))
+    return {status:'removed',message:'Сторінка повідомляє, що відео недоступне або видалене.'};
+  return null;
+}
 export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const host=VIDEO_PROVIDERS[provider];if(!host)throw Object.assign(new Error('Невідоме джерело'),{status:400});
   let page;
@@ -163,6 +173,8 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
     const {streams,episodes}=parseStructuredMedia(json);
     return {provider,streams,episodes,sourcePage:page};
   }
+  const availability=availabilityNotice(content);
+  if(availability?.status==='access_denied')return {provider,streams:[],episodes:[],sourcePage:page,mediaStatus:availability.status,warnings:[{status:403,message:availability.message}]};
   const start=parseMediaDocument(content,page);
   const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[],embedCount:start.embeds.length};
   const pending=start.embeds.map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
@@ -180,5 +192,6 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
   result.streams=uniqueItems(result.streams).slice(0,50);
   result.episodes=uniqueItems(result.episodes).slice(0,80);
   result.mediaStatus=result.streams.length?'available':result.warnings.some(w=>[401,403,451].includes(w.status))?'access_denied':result.warnings.length?'upstream_error':result.embedCount?'no_supported_media':'no_public_media';
+  if(!result.streams.length&&availability){result.mediaStatus=availability.status;result.warnings.unshift({status:0,message:availability.message});}
   return result;
 }

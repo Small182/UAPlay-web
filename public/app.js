@@ -403,7 +403,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     <div class="settings-card"><h3>Встановити на iPhone</h3><p>Відкрийте сайт через Safari → «Поділитися» → «На початковий екран». UAPlay відкриватиметься як окремий застосунок.</p></div>
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.2 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.3 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a></div>${legalNotice()}`;
 }
 async function showView(view) {
@@ -483,14 +483,15 @@ async function loadProvider(provider){
   const providerName=PROVIDER_FALLBACK.find(p=>p[0]===provider)?.[1]||provider;
   modal.innerHTML=switchScreen('Джерела відео',`<p class="switch-subtitle">${safe(providerName)} · ${safe(item.title)}</p><div id="source-results" class="switch-list-rows" aria-live="polite"><p class="switch-subtitle">Шукаємо матеріали…</p></div>`, 'providers');
   const chosen=keyFor(item);const box=$('#source-results');
+  const releaseYear=String(item.date||'').slice(0,4);
   try{
-    let data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.originalTitle||'')}`);
+    let data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.originalTitle||'')}&year=${encodeURIComponent(releaseYear)}`);
     if(!data.results?.length && item.originalTitle&&item.originalTitle!==item.title)
-      data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.originalTitle)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.title)}`);
+      data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.originalTitle)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.title)}&year=${encodeURIComponent(releaseYear)}`);
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!$('#source-results'))return;
-    box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}</span><span class="row-trailing">›</span></button>`).join(''):
+    box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season?` · Сезон ${source.season}`:""}</span><span class="row-trailing">›</span></button>`).join(''):
       '<p class="switch-subtitle">Нічого не знайдено. Джерело може бути недоступне або змінити структуру сайту.</p>';
-  }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
+  }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p>${provider==='uaflix'&&/403/.test(e.message)?'<p class="switch-subtitle">UAFresh також повідомляє про обмеження доступу UAFlix у браузері. Перевірте доступ у своєму акаунті безпосередньо на сайті.</p><a class="source-external" href="https://uafix.net/" target="_blank" rel="noopener noreferrer">Відкрити UAFlix ↗</a>':''}<button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
 }
 function renderStreamChoices(data){
   const source=state.activeSource;
@@ -499,7 +500,7 @@ function renderStreamChoices(data){
   const episodes=Array.isArray(data.episodes)?data.episodes:[];
   const filtered=episodes.filter(s=>!s.season||s.season===state.selectedSeason).filter(s=>!s.episode||s.episode===state.selectedEpisode);
   const choices=state.activeItem?.type==='tv'&&episodes.some(s=>s.season||s.episode)?filtered:streams;
-  const emptyMessage=episodes.length&&streams.length?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
+  const emptyMessage=episodes.length&&streams.length?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
   const list=choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(stream.label||stream.voice||`Варіант ${i+1}`)} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
   const fallback=source.url?`<a class="source-external" href="${safe(source.url)}" rel="noopener noreferrer" target="_blank">Відкрити сторінку джерела ↗</a>`:'';
   modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${list||`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`}</div>${!choices.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${fallback}`, 'providers');
