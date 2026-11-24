@@ -98,35 +98,46 @@ export function parseMediaDocument(body,base) {
     const voice=cappedLabel(match[1].match(/\bdata-voice\s*=\s*(["'])(.*?)\1/i)?.[2]||'');
     episodes.push({...media,label:label||voice||'Відтворити',season,episode,voice});
   }
-  const embeds=[];
-  // Explicit iframe/frame/JS embed links only; restrict remote HTML fetches to a fixed allowlist.
-  const re=/<(?:iframe|embed)\b[^>]*?\bsrc\s*=\s*(["'])(.*?)\1/gi;
-  for(const m of decoded.matchAll(re)) {
-    const url=parseHttpsLink(m[2],base,true);
-    if(url && !embeds.includes(url.href))embeds.push(url.href);
+  // Public structured media metadata only; no script execution or opaque data decoding.
+  for(const match of body.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)){
+    if(!/\btype\s*=\s*["']application\/json["']/i.test(match[1])||match[2].length>500000)continue;
+    try{
+      const structured=parseStructuredMedia(JSON.parse(match[2]),base);
+      streams.push(...structured.streams);episodes.push(...structured.episodes);
+    }catch{}
   }
-  return {streams:uniqueItems([...episodes,...streams]),episodes,embeds:embeds.slice(0,6)};
+  const embeds=[];
+  for(const match of body.matchAll(/<(?:iframe|embed)\b[^>]*>/gi)){
+    const tag=match[0];if(/\s+srcdoc\s*=/i.test(tag))continue;
+    const attr=name=>tag.match(new RegExp('\\s+'+name+'\\s*=\\s*(["\\x27])(.*?)\\1','i'))?.[2];
+    for(const value of [attr('src'),attr('data-src')]){
+      if(!value)continue;
+      const url=parseHttpsLink(value,base,true);
+      if(url&&!embeds.includes(url.href))embeds.push(url.href);
+    }
+  }
+  return {streams:uniqueItems([...episodes,...streams]),episodes:uniqueItems(episodes),embeds:embeds.slice(0,6)};
 }
-export function parseStructuredMedia(payload) {
+export function parseStructuredMedia(payload,base) {
   const streams=[];const episodes=[];const seen=new Set();
   function walk(v, depth=0,context={}) {
     if(depth>9||streams.length>70||v===null||v===undefined)return;
     if(typeof v==='string'){
-      const parsed=validMedia(v);
+      const parsed=validMedia(v,base);
       if(parsed){streams.push(parsed);if(context.episode||context.label){episodes.push({...parsed,...context});}}
-      else if(v.length<10000 && (/\.m3u8|\.mp4/i.test(v)))streams.push(...pickVideoLinks(v));
+      else if(v.length<10000 && (/\.m3u8|\.mp4/i.test(v)))streams.push(...pickVideoLinks(v,base));
       else if(v.length<150000 && (v.includes('data-file')||v.includes('iframe'))) {
-        const html=parseMediaDocument(v);streams.push(...html.streams);episodes.push(...html.episodes);
+        const html=parseMediaDocument(v,base);streams.push(...html.streams);episodes.push(...html.episodes);
       }
     }else if(typeof v==='object'){
       if(seen.has(v))return;seen.add(v);
       if(Array.isArray(v)){v.slice(0,150).forEach(x=>walk(x,depth+1,context));return;}
       const label=cappedLabel(v.title||v.name||v.label||v.voice||v.dub||context.label||'');
-      const season=Number(v.season||v.season_number||context.season)||0;
-      const episode=Number(v.episode||v.episode_number||context.episode)||0;
+      const season=Number(v.season||v.season_number||label.match(/(?:сезон|season)\s*(\d+)|(\d+)\s*(?:сезон|season)/i)?.slice(1).find(Boolean)||context.season)||0;
+      const episode=Number(v.episode||v.episode_number||label.match(/(?:серія|episode|епізод)\s*(\d+)|(\d+)\s*(?:серія|episode|епізод)/i)?.slice(1).find(Boolean)||context.episode)||0;
       const ctx={label,season,episode};
       for(const [key,value] of Object.entries(v).slice(0,110)){
-        if(['url','file','source','src','video','stream','hls','mp4','playlist','result','data','players','links','episodes','seasons','items','sources','iframe','embed','qualities','voice','dubbing'].includes(key.toLowerCase()))walk(value,depth+1,ctx);
+        if(['url','file','source','src','video','stream','hls','mp4','playlist','folder','result','data','players','links','episodes','seasons','items','sources','iframe','embed','qualities','voice','dubbing'].includes(key.toLowerCase()))walk(value,depth+1,ctx);
       }
     }
   }
@@ -260,6 +271,10 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
     const next=pending.shift();if(!next||visited.has(next.url))continue;visited.add(next.url);
     try{
       const html=await getResponse(next.url,next.from,fetcher);
+      const notice=availabilityNotice(html.text);
+      if(notice?.status==='access_denied'||notice?.status==='removed'){
+        result.warnings.push({status:notice.status==='access_denied'?403:0,message:notice.message});continue;
+      }
       const parsed=parseMediaDocument(html.text,html.url);
       if(frameCandidates.includes(next.url)&&FRAME_PLAYER_HOSTS.has(new URL(html.url).hostname)&&!availabilityNotice(html.text)&&frameHeadersPermit(html.headers)){
         result.playerEmbeds.push({url:html.url,label:'Вбудований плеєр '+(result.playerEmbeds.length+1)});

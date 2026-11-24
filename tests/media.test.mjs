@@ -131,3 +131,17 @@ test('generic UASerials iframe does not substitute for an episode',async()=>{
  const result=await resolveProviderMedia('uaserials','https://uaserials.my/1-show.html',async url=>new Response(url.includes('uaserials.my')?'<iframe src="https://ashdi.vip/embed/sample"></iframe>':'<html>Public player</html>'));
  assert.equal(result.playerEmbeds.length,0);
 });
+
+test('public JSON playlist preserves explicit season and episode labels',()=>{
+ const body='<script type="application/json">'+JSON.stringify({playlist:[{title:'Сезон 1',folder:[{title:'1 серія',file:'https://cdn.example.org/first.mp4'},{title:'3 серія',file:'https://cdn.example.org/third.m3u8'}]}]})+'</script>';
+ const out=parseMediaDocument(body,'https://example.org/show');
+ assert.deepEqual(out.episodes.map(x=>[x.season,x.episode]),[[1,1],[1,3]]);
+});
+test('lazy public iframe is recognized without executing scripts',()=>{
+ const out=parseMediaDocument('<iframe src="about:blank" data-src="https://ashdi.vip/embed/example"></iframe>','https://example.org/show');
+ assert.deepEqual(out.embeds,['https://ashdi.vip/embed/example']);
+});
+test('explicit access restrictions on nested player are respected',async()=>{
+ const out=await resolveProviderMedia('uaserials','https://uaserials.my/1-show.html',async url=>new Response(url.includes('uaserials.my')?'<iframe src="https://ashdi.vip/embed/example"></iframe>':'<p>Пройдіть авторизацію</p><script type="application/json">{"file":"https://example.org/sample.mp4"}</script>'));
+ assert.equal(out.streams.length,0);assert.equal(out.mediaStatus,'access_denied');
+});
