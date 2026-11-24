@@ -56,3 +56,9 @@ test('Wallhaven safe wallpaper search',async()=>{
     assert.equal((await response.json()).wallpapers.length,1);
   });
 });
+test('provider search reports upstream 403',async()=>{
+  let n=0;await withMockFetch(async()=>{n++;return new Response('',{status:403});},async()=>{
+    const reply=await handleIntegration(req('/api/providers/search?provider=uaflix&q=Test'),{});
+    assert.equal(reply.status,502);assert.equal((await reply.json()).upstreamStatus,403);
+  });assert.equal(n,1);
+});

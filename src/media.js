@@ -103,26 +103,43 @@ export function parseStructuredMedia(payload) {
   const all=uniqueItems(streams).slice(0,50);
   return {streams:all,episodes:uniqueItems(episodes).slice(0,80)};
 }
-async function getResponse(url,referrer,fetcher){
-  const headers={'Accept':'text/html,application/json;q=0.9,*/*;q=0.8','User-Agent':'UAPlay-Web/0.4'};
-  if(referrer){try{const r=new URL(referrer); if(EMBED_HOSTS.has(r.hostname))headers.Referer=r.origin+'/';}catch{}}
-  const response=await fetcher(url,{redirect:'manual',headers,signal:AbortSignal.timeout(10000)});
-  if([301,302,303,307,308].includes(response.status)){
-    const target=parseHttpsLink(response.headers.get('location')||'',url,true);
-    if(!target)throw new Error('Джерело перенаправляє на непідтримуваний сайт');
-    return getResponseDirect(target.href,url,fetcher);
+// Shared transport: ordinary redirects and transient retry only.
+export async function providerRequest(input,options={},fetcher=fetch){
+  const initial=parseHttpsLink(input,undefined,true);
+  if(!initial)throw Object.assign(new Error('Некоректна адреса джерела'),{status:400});
+  let url=initial,method=(options.method||'GET').toUpperCase(),body=options.body;
+  const headers={Accept:'text/html,application/json;q=0.9,*/*;q=0.8','User-Agent':'UAPlay-Web/0.4.1',...(options.headers||{})};
+  const visited=new Set([url.href]);let redirects=0,retries=0;
+  const failure=(message,status=503,upstreamStatus=0)=>Object.assign(new Error(message),{status,upstreamStatus});
+  while(true){
+    let response;
+    try{response=await fetcher(url.href,{method,body,headers,redirect:'manual',signal:AbortSignal.timeout(7000)});}
+    catch(e){if(method==='GET'&&retries++===0)continue;throw failure('Мережевий збій або тайм-аут джерела. Спробуйте ще раз.');}
+    if([301,302,303,307,308].includes(response.status)){
+      const location=response.headers.get('location');
+      const target=location?parseHttpsLink(location,url.href,true):null;
+      if(!target||target.origin!==initial.origin||redirects++>=3||visited.has(target.href))
+        throw failure('Джерело перенаправляє на непідтримувану адресу',502,response.status);
+      if(response.status===303||([301,302].includes(response.status)&&method==='POST')){
+        method='GET';body=undefined;delete headers['Content-Type'];delete headers['content-type'];
+      }
+      visited.add(target.href);url=target;continue;
+    }
+    if([401,403,451].includes(response.status))
+      throw failure('Джерело відхилило запит (HTTP '+response.status+'). Спробуйте інше джерело.',502,response.status);
+    if(response.status===429)throw failure('Ліміт запитів (HTTP 429). Спробуйте пізніше.',503,429);
+    if([500,502,503,504].includes(response.status)&&method==='GET'&&retries++===0)continue;
+    if(!response.ok)throw failure('Джерело повернуло HTTP '+response.status,502,response.status);
+    if(Number(response.headers.get('content-length'))>1800000)throw failure('Завелика відповідь джерела',502);
+    const text=await response.text();
+    if(text.length>1800000)throw failure('Завелика відповідь джерела',502);
+    return {text,url:url.href};
   }
-  if(!response.ok)throw new Error(`Джерело повернуло HTTP ${response.status}`);
-  if(Number(response.headers.get('content-length'))>1_800_000)throw new Error('Завелика відповідь');
-  const text=await response.text();
-  if(text.length>1_800_000)throw new Error('Завелика відповідь');
-  return text;
 }
-async function getResponseDirect(url,referrer,fetcher){
-  // Only one manually validated redirect; no unbounded automatic follow.
-  const response=await fetcher(url,{redirect:'manual',signal:AbortSignal.timeout(10000),headers:{Accept:'text/html,application/json',Referer:new URL(referrer).origin+'/'}});
-  if(!response.ok)throw new Error(`Джерело повернуло HTTP ${response.status}`);
-  const text=await response.text(); if(text.length>1_800_000)throw new Error('Завелика відповідь');return text;
+async function getResponse(url,referrer,fetcher){
+  const headers={};
+  if(referrer){try{const r=new URL(referrer);if(EMBED_HOSTS.has(r.hostname))headers.Referer=r.origin+'/';}catch{}}
+  return providerRequest(url,{headers},fetcher);
 }
 export async function resolveProviderMedia(provider,id,fetcher=fetch){
   const host=VIDEO_PROVIDERS[provider];if(!host)throw Object.assign(new Error('Невідоме джерело'),{status:400});
@@ -134,24 +151,24 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
     const u=parseHttpsLink(id);if(!u||u.hostname!==host)throw Object.assign(new Error('Некоректна адреса матеріалу'),{status:400});
     page=u.href;
   }
-  const content=await getResponse(page,null,fetcher);
+  const loaded=await getResponse(page,null,fetcher);const content=loaded.text;page=loaded.url;
   if(provider==='mikai'||provider==='animeon'){
     let json;try{json=JSON.parse(content)}catch{throw Object.assign(new Error('Некоректний JSON відповіді джерела'),{status:502})}
     const {streams,episodes}=parseStructuredMedia(json);
     return {provider,streams,episodes,sourcePage:page};
   }
   const start=parseMediaDocument(content,page);
-  const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page};
+  const result={provider,streams:[...start.streams],episodes:[...start.episodes],sourcePage:page,warnings:[]};
   const pending=start.embeds.map(url=>({url,depth:1,from:page}));const visited=new Set([page]);
   // Follow at most five explicit iframe links and two levels, never arbitrary URLs.
   while(pending.length && visited.size<6){
     const next=pending.shift();if(!next||visited.has(next.url))continue;visited.add(next.url);
     try{
       const html=await getResponse(next.url,next.from,fetcher);
-      const parsed=parseMediaDocument(html,next.url);
+      const parsed=parseMediaDocument(html.text,html.url);
       result.streams.push(...parsed.streams);result.episodes.push(...parsed.episodes);
       if(next.depth<2)pending.push(...parsed.embeds.map(url=>({url,depth:next.depth+1,from:next.url})));
-    }catch{ /* inaccessible embed does not hide media from other allowed embeds */ }
+    }catch(e){if(result.warnings.length<5)result.warnings.push({status:e.upstreamStatus||0,message:e.message});}
     if(result.streams.length>=50)break;
   }
   result.streams=uniqueItems(result.streams).slice(0,50);

@@ -12,11 +12,11 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 PUBLIC=ROOT/'public'
-TARGET=Path(sys.argv[1]) if len(sys.argv)>1 else ROOT.parent/'UAPlay-web-cloudflare-pages-v0.4.0.zip'
+TARGET=Path(sys.argv[1]) if len(sys.argv)>1 else ROOT.parent/'UAPlay-web-cloudflare-pages-v0.4.1.zip'
 MEDIA=(ROOT/'src/media.js').read_text()
 INTEGRATIONS=(ROOT/'src/integrations.js').read_text()
 MEDIA=MEDIA.replace('export const ', 'const ').replace('export async function ', 'async function ').replace('export function ', 'function ')
-INTEGRATIONS=INTEGRATIONS.replace("import { resolveProviderMedia } from './media.js';",'')
+INTEGRATIONS=INTEGRATIONS.replace("import { resolveProviderMedia, providerRequest } from './media.js';",'')
 WORKER=(ROOT/'src/worker.js').read_text()
 INTEGRATIONS=INTEGRATIONS.replace('export async function handleIntegration(', 'async function handleIntegration(')
 INTEGRATIONS=INTEGRATIONS.replace('export {normalizeAnime,parseHtmlSearch,PROVIDERS};','')

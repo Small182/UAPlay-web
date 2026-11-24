@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseMediaDocument,parseStructuredMedia,resolveProviderMedia,decodeMarkup} from '../src/media.js';
+import {parseMediaDocument,parseStructuredMedia,resolveProviderMedia,decodeMarkup,providerRequest} from '../src/media.js';
 
 test('decode HTML entities and escaped JS URLs',()=>{
   assert.equal(decodeMarkup('https:\\/\\/cdn.example.org\\/a.m3u8?a=1&amp;b=2'),'https://cdn.example.org/a.m3u8?a=1&b=2');
@@ -38,4 +38,25 @@ test('resolve UAKino page through an explicitly allowlisted iframe',async()=>{
 test('strict media page origin prevents arbitrary backend fetch',async()=>{
   await assert.rejects(resolveProviderMedia('uaflix','https://localhost/admin',async()=>{throw Error('fetch should not run')}),/Некоректна адреса/);
   await assert.rejects(resolveProviderMedia('uafilm','https://klonua.com.evil.example/a',async()=>{throw Error('fetch should not run')}),/Некоректна адреса/);
+});
+test('same-origin provider redirect',async()=>{
+  const seen=[];
+  const out=await providerRequest('https://uafix.net/a',{},async url=>{
+    seen.push(url);return url.endsWith('/a')?new Response(null,{status:302,headers:{location:'/b'}}):new Response('ok');
+  });
+  assert.equal(out.text,'ok');assert.equal(out.url,'https://uafix.net/b');assert.equal(seen.length,2);
+});
+test('transient GET retry',async()=>{
+  let n=0;
+  assert.equal((await providerRequest('https://uafix.net/a',{},async()=>++n===1?new Response('',{status:503}):new Response('ok'))).text,'ok');assert.equal(n,2);
+});
+test('403 is never retried or rerouted',async()=>{
+  let n=0;await assert.rejects(providerRequest('https://uafix.net/a',{},async()=>{n++;return new Response('',{status:403});}),e=>e.upstreamStatus===403&&e.status===502);assert.equal(n,1);
+});
+test('cross-origin redirect is rejected',async()=>{
+  let n=0;await assert.rejects(providerRequest('https://uafix.net/a',{},async()=>{n++;return new Response(null,{status:302,headers:{location:'https://evil.example/a'}});}),/непідтримувану/);assert.equal(n,1);
+});
+test('embedded 403 is reported',async()=>{
+  const out=await resolveProviderMedia('uaflix','https://uafix.net/a',async url=>url.includes('uafix.net')?new Response('<iframe src="https://ashdi.vip/example"></iframe>'):new Response('',{status:403}));
+  assert.equal(out.streams.length,0);assert.equal(out.warnings[0].status,403);
 });

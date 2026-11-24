@@ -1,4 +1,4 @@
-import { resolveProviderMedia } from './media.js';
+import { resolveProviderMedia, providerRequest } from './media.js';
 // UAPlay-nx provider endpoints adapted to Cloudflare Workers.
 // External services may alter their API, block Workers, or require rights/authorization.
 // Never proxy arbitrary URLs or bypass authentication/DRM.
@@ -78,7 +78,7 @@ async function providerSearch(params) {
     options={method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Referer':`${conf.host}/`},
       body:new URLSearchParams({do:'search',subaction:'search',search_start:'0',full_search:'0',result_from:'1',story:query}).toString()};
   }else endpoint=`${conf.host}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`;
-  const body=await upstream(endpoint,options);
+  const {text:body}=await providerRequest(endpoint,options);
   let results;
   if(conf.type==='json'){
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
@@ -152,6 +152,6 @@ export async function handleIntegration(request,env){
     if(path==='/api/wallpapers')return await wallpapers(url.searchParams);
     if(path==='/api/subtitles')return await subtitles(url.searchParams,env);
     return await releases();
-  }catch(e){return err(e?.message||'Зовнішнє джерело недоступне',e?.status||503);}
+  }catch(e){return js({error:e?.message||'Зовнішнє джерело недоступне',upstreamStatus:e?.upstreamStatus||0},e?.status||503);}
 }
 export {normalizeAnime,parseHtmlSearch,PROVIDERS};
