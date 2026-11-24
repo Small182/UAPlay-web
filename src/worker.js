@@ -40,20 +40,18 @@ function allowed(m) {
   const countries = m.origin_country || (m.production_countries || []).map(c => c.iso_3166_1) || [];
   return m.original_language !== 'ru' && !countries.includes('RU');
 }
-// Switch builds use TMDB_API_KEY (v3, 32 hexadecimal digits). Cloudflare stores
-// the same key as a server-only secret. TMDB_TOKEN remains supported for a v4
-// API Read Access Token; accept a v3 key there too for older installations.
+// Both the original Switch v3 API key and a v4 read-access token are accepted.
+// Credentials stay server-side in Cloudflare secrets; never expose them in pages.
 function tmdbCredentials(env) {
-  const v3 = String(env?.TMDB_API_KEY || '').trim();
-  const other = String(env?.TMDB_TOKEN || '').trim();
-  if (v3) {
-    if (!/^[0-9a-f]{32}$/i.test(v3))
-      throw Object.assign(new Error('TMDB_API_KEY має бути 32-символьним ключем TMDB v3'), { status: 503 });
-    return { apiKey: v3 };
+  const v3=String(env?.TMDB_API_KEY||'').trim();
+  const other=String(env?.TMDB_TOKEN||'').trim();
+  if(v3){
+    if(!/^[0-9a-f]{32}$/i.test(v3))throw Object.assign(new Error('TMDB_API_KEY має бути 32-символьним ключем TMDB v3'),{status:503});
+    return {apiKey:v3};
   }
-  if (!other) return null;
-  if (/^[0-9a-f]{32}$/i.test(other)) return { apiKey: other };
-  return { bearer: other };
+  if(!other)return null;
+  if(/^[0-9a-f]{32}$/i.test(other))return {apiKey:other};
+  return {bearer:other};
 }
 async function tmdbRequest(path, params, env) {
   const credentials = tmdbCredentials(env);
@@ -62,8 +60,8 @@ async function tmdbRequest(path, params, env) {
   url.searchParams.set('language', 'uk-UA');
   for (const [key, value] of Object.entries(params || {})) if (value !== null && value !== '') url.searchParams.set(key, String(value));
   if (credentials.apiKey) url.searchParams.set('api_key', credentials.apiKey);
-  const headers = { Accept: 'application/json' };
-  if (credentials.bearer) headers.Authorization = `Bearer ${credentials.bearer}`;
+  const headers={Accept:'application/json'};
+  if(credentials.bearer)headers.Authorization=`Bearer ${credentials.bearer}`;
   const response = await fetch(url.toString(), {
     headers,
     cf: { cacheTtl: 300, cacheEverything: true }
@@ -150,7 +148,7 @@ export async function handleApi(request, env) {
   if (request.method !== 'GET') return error('Метод не підтримується', 405);
   const path = url.pathname;
   try {
-    if (path === '/api/health') return json({ name: 'UAPlay Web', ok: true, tmdbConfigured: !!(env.TMDB_API_KEY || env.TMDB_TOKEN) });
+    if (path === '/api/health') return json({ name: 'UAPlay Web', ok: true, tmdbConfigured: !!(env.TMDB_API_KEY||env.TMDB_TOKEN) });
     if (path === '/api/catalog') return await catalogue(url.searchParams, env);
     if (path === '/api/search') return await search(url.searchParams, env);
     if (path === '/api/iptv') return await iptv(url.searchParams);

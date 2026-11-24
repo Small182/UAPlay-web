@@ -43,9 +43,9 @@ test('SubDL token required and never serialized to browser',async()=>{
     assert.equal(response.status,200);assert.doesNotMatch(await response.text(),/secret-value/);
   });
 });
-test('provider media refuses untrusted IDs and unsupported HTML extraction',async()=>{
+test('provider media rejects invalid IDs and URLs',async()=>{
   assert.equal((await handleIntegration(req('/api/providers/media?provider=mikai&id=http%3A%2F%2Flocalhost'),{})).status,400);
-  assert.equal((await handleIntegration(req('/api/providers/media?provider=uakino&id=42'),{})).status,501);
+  assert.equal((await handleIntegration(req('/api/providers/media?provider=uakino&id=42'),{})).status,400);
 });
 test('Wallhaven safe wallpaper search',async()=>{
   await withMockFetch(async(url)=>{

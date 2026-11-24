@@ -1,3 +1,4 @@
+import { resolveProviderMedia } from './media.js';
 // UAPlay-nx provider endpoints adapted to Cloudflare Workers.
 // External services may alter their API, block Workers, or require rights/authorization.
 // Never proxy arbitrary URLs or bypass authentication/DRM.
@@ -87,26 +88,11 @@ async function providerSearch(params) {
 }
 async function providerMedia(params) {
   const provider=clean(params.get('provider'),24).toLowerCase();
-  if(!['mikai','animeon'].includes(provider))return err('Автоматичне визначення потоку для цього джерела ще не адаптовано',501);
-  const id=params.get('id');if(!digits(id))return err('Некоректний ID');
-  const endpoint=provider==='mikai'?`https://api.mikai.me/public/v1/anime/${id}/player`:`https://animeon.club/api/player/${id}`;
-  const raw=await upstream(endpoint);
-  let data;try{data=JSON.parse(raw);}catch{throw new Error('Некоректна відповідь API джерела');}
-  // Only expose direct HTTPS media from structured responses; never relay media or bypass access controls.
-  const found=[];const visited=new Set();
-  function collect(v,depth=0){
-    if(depth>6||found.length>15||v===null||typeof v==='undefined')return;
-    if(typeof v==='string'){
-      if(v.length>2048)return;
-      try{const u=new URL(v);if(u.protocol==='https:' && /\.(?:m3u8|mp4)(?:$|[?#])/i.test(u.pathname+u.search))found.push(u.href);}catch{}
-    }else if(typeof v==='object'){
-      if(visited.has(v))return;visited.add(v);
-      if(Array.isArray(v))v.slice(0,50).forEach(e=>collect(e,depth+1));
-      else Object.entries(v).slice(0,50).forEach(([k,e])=>{if(/^(?:url|file|source|src|video|stream|hls|mp4|playlist|result|data|players|links|episodes)$/i.test(k))collect(e,depth+1);});
-    }
-  }
-  collect(data);
-  return js({provider,streams:[...new Set(found)].map(url=>({url,type:/\.m3u8/i.test(url)?'hls':'mp4'})),notice:'Потоки можуть не працювати в iOS через кодек або обмеження сервісу.'},200,30);
+  if(!PROVIDERS[provider])return err('Невідоме джерело');
+  const id=params.get('id')||'';
+  if(id.length>2048)return err('Завеликий ID');
+  const data=await resolveProviderMedia(provider,id);
+  return js({...data,notice:data.streams.length?'Відтворення залежить від доступності потоку та обмежень Safari.':'Сторінка джерела не містить відкритого MP4/HLS. Перевірте відео на сайті джерела.'},200,30);
 }
 async function wallpapers(params){
   const query=clean(params.get('q'),70);
