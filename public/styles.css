@@ -441,3 +441,38 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
     html[data-device=phone][data-view=home] .home-shelf-rail .poster-card{flex-basis:clamp(64px,min(30cqw,36cqh),130px);width:clamp(64px,min(30cqw,36cqh),130px)}
   }
 }
+
+/* Tablet home: allow long titles to wrap without compressing the title,
+   metadata or action buttons. Keep the existing hero-above-rail layout. */
+@media (min-width:761px) and (any-pointer:coarse){
+  html[data-device=non-phone][data-view=home] .home-hero{
+    height:auto;min-height:clamp(160px,25dvh,260px);max-height:none;
+    align-items:flex-start;gap:14px
+  }
+  html[data-device=non-phone][data-view=home] .hero-content{
+    align-self:stretch;min-width:0;justify-content:flex-start
+  }
+  html[data-device=non-phone][data-view=home] .hero-title{
+    display:block;flex:0 0 auto;width:100%;max-width:100%;
+    font-size:clamp(22px,2.8vw,31px);line-height:1.2;
+    white-space:normal;overflow-wrap:anywhere;overflow:visible;
+    text-overflow:clip;-webkit-line-clamp:unset;margin:0 0 7px
+  }
+  html[data-device=non-phone][data-view=home] .hero-meta{
+    flex:0 0 auto;font-size:clamp(14px,1.8vw,19px);margin:0 0 7px
+  }
+  html[data-device=non-phone][data-view=home] .hero-desc{
+    flex:0 1 auto;min-height:0;margin:0 0 8px;
+    font-size:clamp(14px,1.8vw,18px);-webkit-line-clamp:2
+  }
+  html[data-device=non-phone][data-view=home] .hero-buttons{
+    flex:0 0 auto;max-width:100%;flex-wrap:wrap;gap:8px;margin-top:auto
+  }
+  html[data-device=non-phone][data-view=home] .hero-buttons .btn{
+    min-width:0;height:40px;font-size:15px;padding:0 14px
+  }
+  html[data-device=non-phone][data-view=home] .hero-poster{
+    height:clamp(130px,calc(25dvh - 24px),236px);width:auto;
+    flex:0 0 auto;aspect-ratio:2/3;align-self:flex-start
+  }
+}
