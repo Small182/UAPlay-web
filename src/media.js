@@ -17,8 +17,11 @@ function publicPlayerFrames(body,base){
     const tag=match[0];
     if(/\s+srcdoc\s*=/i.test(tag))continue;
     const attr=name=>tag.match(new RegExp('\\s+'+name+'\\s*=\\s*(["\\x27])(.*?)\\1','i'))?.[2];
-    const url=parseHttpsLink(attr('src')||attr('data-src'),base,true);
-    if(url&&FRAME_PLAYER_HOSTS.has(url.hostname)&&!validMedia(url.href,base)&&!found.includes(url.href))found.push(url.href);
+    for(const raw of [attr('src'),attr('data-src')]){
+      if(!raw)continue;
+      const url=parseHttpsLink(raw,base,true);
+      if(url&&FRAME_PLAYER_HOSTS.has(url.hostname)&&!validMedia(url.href,base)&&!found.includes(url.href))found.push(url.href);
+    }
   }
   return found.slice(0,6);
 }

@@ -168,3 +168,9 @@ test('duplicate episode metadata can enrich a missing voice name',()=>{
  const out=parseMediaDocument(body,'https://example.org/page');
  assert.equal(out.episodes.length,1);assert.equal(out.episodes[0].voice,'Studio A');
 });
+
+test('UAFilm uses explicit lazy player iframe when src is a placeholder',async()=>{
+ const out=await resolveProviderMedia('uafilm','https://klonua.com/test',async url=>new Response(url.includes('klonua.com')?'<iframe src="about:blank" data-src="https://ashdi.vip/embed/sample"></iframe>':'<html>Public player</html>'));
+ assert.equal(out.playerEmbeds.length,1);
+ assert.equal(out.playerEmbeds[0].url,'https://ashdi.vip/embed/sample');
+});

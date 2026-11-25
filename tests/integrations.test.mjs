@@ -241,3 +241,30 @@ test('UASerials movie matching preserves meaningful title numbers',async()=>{
   assert.deepEqual((await response.json()).results.map(x=>x.id),['https://uaserials.my/1-example-2026.html']);
  });
 });
+
+test('UASerials and UAFilm query both local and original movie titles even with irrelevant first results',async()=>{
+ for(const provider of ['uaserials','uafilm']){
+  const terms=[];
+  await withMockFetch(async(url,options)=>{
+   const term=new URL(url).searchParams.get('story')||new URLSearchParams(options.body).get('story');
+   terms.push(term);
+   const prefix=provider==='uafilm'?'/filmy/':'/';
+   return new Response(term==='Inception'
+    ?'<a class="card-link__text" href="'+prefix+'1-inception-2010.html">Початок / Inception (2010)</a>'
+    :'<a class="card-link__text" href="'+prefix+'2-other-2010.html">Початок іншої історії</a>');
+  },async()=>{
+   const response=await handleIntegration(req('/api/providers/search?provider='+provider+'&type=movie&year=2010&q='+encodeURIComponent('Початок')+'&original=Inception'),{});
+   const data=await response.json();
+   assert.deepEqual(terms,['Початок','Inception']);
+   assert.equal(data.results.length,1);
+   assert.match(data.results[0].id,/1-inception-2010\.html$/);
+  });
+ }
+});
+test('dual query deduplicates an exact movie returned by both searches',async()=>{
+ let calls=0;
+ await withMockFetch(async()=>{calls++;return new Response('<a href="/1-inception-2010.html"><span class="th-title">Початок</span><span class="th-title-oname">Inception</span></a>');},async()=>{
+  const response=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2010&q='+encodeURIComponent('Початок')+'&original=Inception'),{});
+  assert.equal((await response.json()).results.length,1);assert.equal(calls,2);
+ });
+});

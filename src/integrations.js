@@ -94,7 +94,7 @@ function exactMovieTitle(value,year=0){
 }
 function exactMovieMatch(item,local,original,year){
   const wanted=new Set([local,original].map(x=>normalizedTitle(x)).filter(Boolean));
-  return [item.title,item.original].some(x=>wanted.has(exactMovieTitle(x,year)));
+  return [item.title,item.original].flatMap(x=>[String(x||''),...String(x||'').split(/\s+[/|]\s+/)]).some(x=>wanted.has(exactMovieTitle(x,year)));
 }
 function rankSources(results,local,original='',strict=false,year=0,type='',season=0,seasonYear=0){
   const a=baseCatalogueTitle(local),b=baseCatalogueTitle(original);
@@ -124,7 +124,7 @@ function rankSources(results,local,original='',strict=false,year=0,type='',seaso
     return true;
   });
   const top=compatible[0]?.score||0;
-  let relevant=compatible.filter(x=>x.item.provider==='uaserials'&&type==='movie'
+  let relevant=compatible.filter(x=>['uaserials','uafilm'].includes(x.item.provider)&&type==='movie'
     ?exactMovieMatch(x.item,local,original,year)&&(!year||!x.year||x.year===year)
     :top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true);
   if(type==='tv'&&season>0)relevant.sort((x,y)=>Number(y.season===season)-Number(x.season===season)||y.score-x.score);
@@ -209,7 +209,11 @@ async function providerSearch(params) {
   if(!PROVIDERS[provider])return err('Невідоме джерело');
   const query=clean(params.get('q'),100);
   if(query.length<2)return err('Пошуковий запит надто короткий');
-  const conf=PROVIDERS[provider];let endpoint,options;
+  const conf=PROVIDERS[provider];
+  const type=params.get('type')||'';const original=clean(params.get('original'),100);
+  const year=Number(params.get('year'))||0;
+  async function searchOne(query){
+  let endpoint,options;
   if(provider==='mikai')endpoint=`${conf.host}/public/v1/anime?search=${encodeURIComponent(query)}&limit=12`;
   else if(provider==='animeon')endpoint=`${conf.host}/api/anime?search=${encodeURIComponent(query)}&take=12`;
   else if(conf.type==='html-post'){
@@ -218,15 +222,24 @@ async function providerSearch(params) {
       body:new URLSearchParams({do:'search',subaction:'search',search_start:'0',full_search:'0',result_from:'1',story:query}).toString()};
   }else endpoint=`${conf.host}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`;
   const {text:body}=await providerRequest(endpoint,options);
-  const type=params.get('type')||'';const original=clean(params.get('original'),100);
   let results;
   if(conf.type==='json'){
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
     if(payload?.ok===false)throw Object.assign(new Error('API джерела повідомило про помилку'),{status:502});
     results=normalizeAnime(provider,payload);
   }else results=parseHtmlSearch(provider,body,type);
-  const year=Number(params.get('year'))||0;
-  results=rankSources(results,query,original,['uafilm','uaserials','eneyida'].includes(provider),year,type,Number(params.get('season'))||0,Number(params.get('seasonYear'))||0).slice(0,18);
+  return results;
+  }
+  const queries=[query];
+  if(['uaserials','uafilm'].includes(provider)&&original.length>=2&&normalizedTitle(original)!==normalizedTitle(query))queries.push(original);
+  const rows=[];
+  for(const term of queries){
+    try{rows.push(...await searchOne(term));}
+    catch(e){if(!rows.length)throw e;break;}
+  }
+  const ranked=rankSources(rows,query,original,['uafilm','uaserials','eneyida'].includes(provider),year,type,Number(params.get('season'))||0,Number(params.get('seasonYear'))||0);
+  // Deduplicate after validation so a weaker duplicate cannot conceal an exact match.
+  const results=[...new Map(ranked.slice().reverse().map(row=>[row.id,row])).values()].reverse().slice(0,18);
   return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,0);
 }
 async function providerMedia(params) {

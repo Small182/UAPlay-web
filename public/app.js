@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.42 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.43 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -613,10 +613,12 @@ function showSources(item){
 `,item.type==='tv'?'episodes':'close');
 }
 function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
+  if(provider==='uafilm'&&state.activeItem?.type==='movie')return '';
   const target=providerFrameUrl(provider,url);
   return target?`<button type="button" class="btn secondary" data-provider-frame="${safe(provider)}" data-frame-url="${safe(target)}">${safe(label)}</button>`:'';
 }
 function openProviderFrame(provider,value){
+  if(provider==='uafilm'&&state.activeItem?.type==='movie'){toast('Оберіть вбудований плеєр');return;}
   const target=providerFrameUrl(provider,value);
   if(!target){toast('Непідтримувана адреса джерела');return;}
   cleanupPlayer();state.activePlayer=null;const returnProvider=provider;state.activeProvider=returnProvider;
@@ -653,7 +655,7 @@ async function loadProvider(provider){
   const seasonParam=item.type==='tv'?'&season='+encodeURIComponent(state.selectedSeason)+'&seasonYear='+encodeURIComponent(seasonYear):'';
   try{
     let data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.originalTitle||'')}&year=${encodeURIComponent(releaseYear)}${seasonParam}`);
-    if(!data.results?.length && item.originalTitle&&item.originalTitle!==item.title)
+    if(!['uaserials','uafilm'].includes(provider)&&!data.results?.length && item.originalTitle&&item.originalTitle!==item.title)
       data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.originalTitle)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.title)}&year=${encodeURIComponent(releaseYear)}${seasonParam}`);
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!box.isConnected)return;
     state.sourceResults=data.results||[];
@@ -680,7 +682,8 @@ function renderStreamChoices(data){
   const episodes=Array.isArray(data.episodes)?data.episodes:[];
   const isTV=state.activeItem?.type==='tv';
   const matching=isTV?episodeChoices(data,{season:state.selectedSeason,episode:state.selectedEpisode,sourceSeason:source.season||0}):null;
-  const choices=isTV?matching.selected:streams;
+  const hasMovieFrames=!isTV&&source.provider==='uafilm'&&data.playerEmbeds?.some(p=>playerFrameUrl(source.provider,p.url));
+  const choices=isTV?matching.selected:hasMovieFrames?[]:streams;
   const voices=voiceChoices(source.provider,isTV,choices);
   state.groupedVoices=voices.length?{source,season:state.selectedSeason,episode:state.selectedEpisode,rows:voices}:null;
   const unverified=[]; // Never present a full unlabeled list as the selected episode.
@@ -704,12 +707,16 @@ async function playProviderMedia(provider,id){
     const data=await api(`/api/providers/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(id)}`);
     if(keyFor(state.activeItem)!==chosen||state.activeSource!==activeRequest||state.selectedSeason!==season||state.selectedEpisode!==episode||state.activeProvider!==provider)return;
     const streams=data.streams||[];
+    if(provider==='uafilm'&&item.type==='movie'){
+      const frames=[...new Set((data.playerEmbeds||[]).map(p=>playerFrameUrl(provider,p.url)).filter(Boolean))];
+      if(frames.length===1){state.playerEmbeds=frames;openEmbeddedPlayer(provider,frames[0]);return;}
+    }
     if(streams.length===1 && (!item.type || item.type!=='tv') && !(data.episodes?.length>1) && !data.playerEmbeds?.length) {
       openPlayer(item,streams[0].url);return;
     }
     renderStreamChoices(data);
   }catch(e){
-    if($('#modal-root .switch-screen')&&state.activeSource===activeRequest&&state.selectedSeason===season&&state.selectedEpisode===episode&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
+    if($('#modal-root .switch-screen')&&state.activeSource===activeRequest&&state.selectedSeason===season&&state.selectedEpisode===episode&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url&&!(provider==='uafilm'&&item.type==='movie')?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
   }
 }
 
