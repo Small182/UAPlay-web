@@ -130,6 +130,59 @@ function rankSources(results,local,original='',strict=false,year=0,type='',seaso
   if(type==='tv'&&season>0)relevant.sort((x,y)=>Number(y.season===season)-Number(x.season===season)||y.score-x.score);
   return relevant.map(x=>({...x.item,year:x.year,season:x.season}));
 }
+// Match complete, balanced result cards. A heading outside a poster link
+// belongs to that link only when the card contains exactly one article URL.
+function uaserialMovieCards(html,attr,classLabel){
+  const stack=[],cards=[];
+  const source=String(html).replace(/<!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,m=>' '.repeat(m.length));
+  for(const hit of source.matchAll(/<\/?(?:div|article|li|section)\b[^>]*>/gi)){
+    const tag=hit[0].match(/^<\/?([a-z]+)/i)[1].toLowerCase();
+    if(!hit[0].startsWith('</')){
+      const cls=attr(hit[0],'class').split(/\s+/);
+      const card=tag==='article'||cls.some(c=>/^(?:th|th-item|th-in|th-wrap|short-item|shortstory|movie-item|search-result|search-item|sres-wrap)(?:[-_][\w-]+)?$/i.test(c)&&!/^th-(?:title|img|poster|rating|desc|info|text)/i.test(c));
+      stack.push({tag,start:hit.index,card});
+    }else{
+      let at=stack.length-1;while(at>=0&&stack[at].tag!==tag)at--;
+      if(at<0)continue;
+      const node=stack[at];stack.length=at;
+      if(!node.card||hit.index-node.start>30000)continue;
+      const piece=source.slice(node.start,hit.index+hit[0].length);
+      const urls=[...new Set([...piece.matchAll(/<a\b[^>]*>/gi)].map(a=>articleLink('uaserials',attr(a[0],'href'),'movie')).filter(Boolean))];
+      if(urls.length!==1)continue;
+      const local=htmlPlain(classLabel(piece,'th-title(?!-oname)|movie-title|search-result-title'));
+      const original=htmlPlain(classLabel(piece,'th-title-oname|original-title'));
+      if(local||original)cards.push({url:urls[0],title:local,original});
+    }
+  }
+  return cards;
+}
+// Slug is only a candidate hint; an article's own title must independently
+// confirm identity before it may be returned to the client.
+function ukrainianSlug(value){
+  const map={а:'a',б:'b',в:'v',г:'h',ґ:'g',д:'d',е:'e',є:'ie',ж:'zh',з:'z',и:'y',і:'i',ї:'i',й:'i',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ь:'',ю:'iu',я:'ia'};
+  return normalizedTitle(value).split(' ').map(word=>Array.from(word).map((c,index)=>(index===0&&{є:'ye',ї:'yi',й:'y',ю:'yu',я:'ya'}[c])||(map[c]??c)).join('')).join('-');
+}
+function uaserialSlugCandidates(html,local,original,year){
+  const wanted=new Set([local,original].map(ukrainianSlug).filter(Boolean));
+  const urls=[];
+  for(const match of String(html).matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>/gi)){
+    const url=articleLink('uaserials',match[2],'movie');if(!url||urls.includes(url))continue;
+    let slug=new URL(url).pathname.replace(/^\/\d+-|\.html$/gi,'');
+    const suffix=slug.match(/-((?:19|20)\d{2})$/);
+    if(suffix&&year>=1900&&Number(suffix[1])!==year)continue;
+    if(suffix&&year>=1900)slug=slug.slice(0,-suffix[0].length);
+    if(wanted.has(slug.toLowerCase()))urls.push(url);
+    if(urls.length>=3)break;
+  }
+  return urls;
+}
+function uaserialArticleIdentity(html){
+  const source=String(html).replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'');
+  const title=htmlPlain(source.match(/<h1\b[^>]*>([\s\S]*?)<\/h1\s*>/i)?.[1]||'');
+  const original=htmlPlain(source.match(/class\s*=\s*["'][^"']*\b(?:full-title-oname|full-oname|th-title-oname|original-title)\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1]||'');
+  const year=Number(source.match(/(?:Рік|Рік випуску)\s*:\s*(?:<[^>]+>\s*)*((?:19|20)\d{2})/i)?.[1])||catalogueYear(title,'');
+  return {title,original,year};
+}
 function parseHtmlSearch(provider,html,type='') {
   const conf=PROVIDERS[provider];if(!conf)return [];
   const matches=[];const seen=new Set();
@@ -182,6 +235,13 @@ function parseHtmlSearch(provider,html,type='') {
     if(!label)label=piece.slice(opening.length).replace(/<\/a\s*>$/i,'');
     add(href,label,original);
   }
+  if(provider==='uaserials'&&type==='movie'){
+    for(const card of uaserialMovieCards(html,attr,classLabel)){
+      const existing=matches.find(row=>row.url===card.url);
+      if(existing){if(card.title)existing.title=card.title;if(card.original)existing.original=card.original;}
+      else add(card.url,card.title||card.original,card.original);
+    }
+  }
   // Klon catalogue cards may keep the title outside the link, as on Switch.
   if(provider==='uafilm'){
     const cards=[...html.matchAll(/class\s*=\s*["'][^"']*\bshort-news__(?:slide-item|small)\b[^"']*["']/gi)];
@@ -212,6 +272,7 @@ async function providerSearch(params) {
   const conf=PROVIDERS[provider];
   const type=params.get('type')||'';const original=clean(params.get('original'),100);
   const year=Number(params.get('year'))||0;
+  const slugCandidates=new Set();
   async function searchOne(query){
   let endpoint,options;
   if(provider==='mikai')endpoint=`${conf.host}/public/v1/anime?search=${encodeURIComponent(query)}&limit=12`;
@@ -222,6 +283,7 @@ async function providerSearch(params) {
       body:new URLSearchParams({do:'search',subaction:'search',search_start:'0',full_search:'0',result_from:'1',story:query}).toString()};
   }else endpoint=`${conf.host}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`;
   const {text:body}=await providerRequest(endpoint,options);
+  if(provider==='uaserials'&&type==='movie')for(const url of uaserialSlugCandidates(body,query,original,year))slugCandidates.add(url);
   let results;
   if(conf.type==='json'){
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
@@ -237,7 +299,21 @@ async function providerSearch(params) {
     try{rows.push(...await searchOne(term));}
     catch(e){if(!rows.length)throw e;break;}
   }
-  const ranked=rankSources(rows,query,original,['uafilm','uaserials','eneyida'].includes(provider),year,type,Number(params.get('season'))||0,Number(params.get('seasonYear'))||0);
+  let ranked=rankSources(rows,query,original,['uafilm','uaserials','eneyida'].includes(provider),year,type,Number(params.get('season'))||0,Number(params.get('seasonYear'))||0);
+  if(provider==='uaserials'&&type==='movie'&&!ranked.length){
+    for(const url of [...slugCandidates].slice(0,3)){
+      try{
+        const response=await providerRequest(url);
+        // A redirect to another article is not evidence for the candidate.
+        if(response.url&&response.url!==url)continue;
+        const identity=uaserialArticleIdentity(response.text);
+        if(year>=1900&&identity.year!==year)continue;
+        const item={id:url,url,provider,name:conf.name,title:identity.title,original:identity.original};
+        if(!item.title||!exactMovieMatch(item,query,original,year))continue;
+        ranked.push({...item,year:identity.year||null,season:null});
+      }catch{}
+    }
+  }
   // Deduplicate after validation so a weaker duplicate cannot conceal an exact match.
   const results=[...new Map(ranked.slice().reverse().map(row=>[row.id,row])).values()].reverse().slice(0,18);
   return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,0);

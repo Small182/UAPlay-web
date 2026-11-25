@@ -268,3 +268,28 @@ test('dual query deduplicates an exact movie returned by both searches',async()=
   assert.equal((await response.json()).results.length,1);assert.equal(calls,2);
  });
 });
+
+test('UASerials movie cards read sibling titles only within a balanced single-article card',async()=>{
+ const html='<div class="th-item"><a href="/1-other-2010.html"><img alt="Other"></a><div class="th-title">Other</div></div><div class="th-item"><a href="/2045-pochatok.html"><img src="/poster.jpg"></a><div class="th-title">Початок</div><div class="th-title-oname">Inception</div></div>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const r=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2010&q='+encodeURIComponent('Початок')+'&original=Inception'),{});
+  assert.deepEqual((await r.json()).results.map(x=>x.id),['https://uaserials.my/2045-pochatok.html']);
+ });
+});
+test('UASerials movie card containing multiple distinct article links cannot borrow a title',()=>{
+ const html='<div class="th-item"><a href="/1-other.html"><img alt="Other"></a><a href="/2-another.html"><img alt="Another"></a><div class="th-title">Inception</div></div>';
+ assert.equal(parseHtmlSearch('uaserials',html,'movie').some(x=>x.title==='Inception'),false);
+});
+test('exact slug candidate is confirmed by public article title and release year, not URL alone',async()=>{
+ for(const actual of ['Початок','Інший фільм']){
+  let pages=0;
+  await withMockFetch(async url=>{
+   if(new URL(url).pathname==='/2045-pochatok.html'){pages++;return new Response('<h1>'+actual+'</h1><div>Рік: <a>2010</a></div>');}
+   return new Response('<a href="/2045-pochatok.html"><img src="/poster.jpg"></a><a href="/2-other.html">Трансформери: Початок</a>');
+  },async()=>{
+   const r=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2010&q='+encodeURIComponent('Початок')+'&original=Inception'),{});
+   const data=await r.json();
+   assert.equal(pages,1);assert.equal(data.results.length,actual==='Початок'?1:0);
+  });
+ }
+});
