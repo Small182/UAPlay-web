@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.37 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.38 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -575,7 +575,7 @@ function drawDetails(item,loading=false) {
   const poster=imageUrl(item.poster,'w500');const key=keyFor(item);
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal switch-detail-screen" role="dialog" aria-modal="true" aria-label="${safe(item.title)}">
     <button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button>
-    <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><span>UAPlay</span></div>
+    <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><span>UAPlay</span><button type="button" class="page-close switch-screen-close" data-close aria-label="Закрити" title="Закрити">${icon('close')}</button></div>
     <div class="detail-layout"><div class="detail-body"><h2>${safe(item.title)}</h2>
       <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(titleMeta(item))}</span></div>
       <p class="detail-description">${safe(item.overview || 'Опис відсутній.')}</p>
@@ -595,21 +595,21 @@ async function loadSeason(number) {
   try{
     const data=await api(`/api/title/tv/${item.id}/season/${number}`);
     if(keyFor(state.activeItem)!==currentKey || !$('#episode-list'))return;
-    target.innerHTML=(data.episodes||[]).map(ep=>`<button type="button" class="episode" data-episode="${ep.number}" aria-label="Серія ${ep.number}"><span class="episode-num">${ep.number}</span><div class="episode-info"><div class="episode-title">${safe(ep.title)}</div><div class="episode-desc">${safe(ep.overview||'')}</div></div><span>›</span></button>`).join('') || '<p class="muted">Серій не знайдено.</p>';
+    target.innerHTML=(data.episodes||[]).map(ep=>`<button type="button" class="episode" data-episode="${ep.number}" aria-label="Серія ${ep.number}"><span class="episode-num">${ep.number}</span><div class="episode-info"><div class="episode-title">${safe(ep.title)}</div><div class="episode-desc">${safe(ep.overview||'')}</div></div><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>`).join('') || '<p class="muted">Серій не знайдено.</p>';
   }catch(e){if($('#episode-list'))$('#episode-list').innerHTML=`<p class="muted">${safe(e.message)}</p>`;}
 }
 const PROVIDER_FALLBACK=[['uaserials','UASerials'],['eneyida','Eneyida'],['uafilm','UAFilm'],['mikai','Mikai'],['animeon','AnimeON']];
 function switchScreen(title,body,back='close'){
   const backAction=back==='providers'?'data-back-providers':back==='seasons'?'data-back-seasons':back==='episodes'?'data-back-episodes':'data-close';
   return `<div class="modal-backdrop switch-modal-backdrop" data-close><section class="switch-screen" role="dialog" aria-modal="true" aria-label="${safe(title)}">
-    <header class="switch-screen-header"><button type="button" class="switch-back" ${backAction} aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>${safe(title)}</h1></header>
+    <header class="switch-screen-header"><button type="button" class="switch-back" ${backAction} aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>${safe(title)}</h1><button type="button" class="page-close switch-screen-close" data-close aria-label="Закрити" title="Закрити">${icon('close')}</button></header>
     <div class="switch-screen-body">${body}</div>
   </section></div>`;
 }
 function showSources(item){
   cleanupPlayer();state.activePlayer=null;state.activeItem=item;state.activeProvider='';state.sourceResults=[];state.activeSource=null;state.groupedVoices=null;
   const extra=item.type==='tv'?`<p class="switch-subtitle">${safe(item.title)} · Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}</p>`:'';
-  modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing">›</span></button>`).join('')}</div>
+  modal.innerHTML=switchScreen('Оберіть джерело',`${extra}<div class="switch-list-rows">${PROVIDER_FALLBACK.filter(([id])=>!state.disabledProviders.includes(id)).map(([id,name])=>`<button type="button" class="switch-row" data-provider="${id}"><span>${safe(name)}</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>`).join('')}</div>
 `,item.type==='tv'?'episodes':'close');
 }
 function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
@@ -633,13 +633,13 @@ async function selectSourceSeason(provider=''){
   let seasons=item.seasonList||[];
   if(!seasons.length&&!state.demoMode){try{const d=await api('/api/title/tv/'+item.id);if(state.activeItem!==item||state.activeProvider!==provider)return;Object.assign(item,d);seasons=d.seasonList||[];}catch{}}
   if(!seasons.length){toast('Список сезонів недоступний');return;}
-  modal.innerHTML=switchScreen('Оберіть сезон','<div class="switch-list-rows">'+seasons.map(x=>'<button class="switch-row" data-source-season="'+x.number+'"><span>'+safe(x.title||('Сезон '+x.number))+'</span><span>›</span></button>').join('')+'</div>','close');
+  modal.innerHTML=switchScreen('Оберіть сезон','<div class="switch-list-rows">'+seasons.map(x=>'<button class="switch-row" data-source-season="'+x.number+'"><span>'+safe(x.title||('Сезон '+x.number))+'</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>').join('')+'</div>','close');
 }
 async function selectSourceEpisodes(provider,season){
   state.selectedSeason=season;state.activeProvider='';const item=state.activeItem;
   modal.innerHTML=switchScreen('Оберіть серію','<div id="source-episode-list">Завантажуємо…</div>','seasons');
   const box=$('#source-episode-list');
-  try{const d=await api('/api/title/tv/'+item.id+'/season/'+season);if(!box.isConnected)return;box.innerHTML='<div class="switch-list-rows">'+(d.episodes||[]).map(e=>'<button class="switch-row" data-source-episode="'+e.number+'"><span>'+e.number+'. '+safe(e.title)+'</span><span>›</span></button>').join('')+'</div>';}catch(e){if(box.isConnected)box.textContent=e.message;}
+  try{const d=await api('/api/title/tv/'+item.id+'/season/'+season);if(!box.isConnected)return;box.innerHTML='<div class="switch-list-rows">'+(d.episodes||[]).map(e=>'<button class="switch-row" data-source-episode="'+e.number+'"><span>'+e.number+'. '+safe(e.title)+'</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>').join('')+'</div>';}catch(e){if(box.isConnected)box.textContent=e.message;}
 }
 async function loadProvider(provider){
   if(!PROVIDER_FALLBACK.some(([id])=>id===provider))return;
@@ -658,7 +658,7 @@ async function loadProvider(provider){
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!box.isConnected)return;
     state.sourceResults=data.results||[];
     if(state.sourceResults.length===1){await playProviderMedia(provider,state.sourceResults[0].id);return;}
-    box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season&&!source.title.includes(String(source.season)+' сезон')?` · Сезон ${source.season}`:""}</span><span class="row-trailing">›</span></button>`).join(''):
+    box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season&&!source.title.includes(String(source.season)+' сезон')?` · Сезон ${source.season}`:""}</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>`).join(''):
       '<p class="switch-subtitle">Нічого не знайдено. Джерело може бути недоступне або змінити структуру сайту.</p>';
   }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
 }
