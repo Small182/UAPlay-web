@@ -8,3 +8,15 @@ export function homeRailMetrics(width,height,gap=20){
 export function wheelCardIndex(current,delta,maxIndex){
   return Math.max(0,Math.min(maxIndex,current+Math.sign(delta)));
 }
+
+// Device classification is independent of viewport size: a short desktop
+// window or a tablet in split-screen is not a phone.
+export function isPhoneDevice({userAgent='',platform='',maxTouchPoints=0,userAgentData}={}){
+  const ua=String(userAgent);
+  if(/\b(?:iPad|Tablet|PlayBook|Kindle|Silk)\b/i.test(ua))return false;
+  // iPadOS may advertise itself as a Mac.
+  if((/Macintosh/i.test(ua)||/^Mac/i.test(platform))&&maxTouchPoints>1)return false;
+  if(/iPhone|iPod|Windows Phone/i.test(ua))return true;
+  if(typeof userAgentData?.mobile==='boolean')return userAgentData.mobile;
+  return /Android/i.test(ua)&&/\bMobile\b/i.test(ua);
+}

@@ -325,47 +325,47 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   :root[data-view=home] .hero-desc{-webkit-line-clamp:2}
 }
 
-/* Short landscape viewports (phones, including iPhone safe areas).
+/* Phone-only landscape layout (including iPhone safe areas).
    The catalogue scrolls vertically on the left; the selected title stays on the right. */
-@media (orientation:landscape) and (max-height:540px) and (max-width:1100px){
-  .main-shell{max-width:none;width:100%;min-height:100%}
-  .topbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:minmax(0,1fr);height:48px;min-height:48px;gap:8px;padding:0 10px}
-  .topbar .brand{grid-column:1;grid-row:1;min-width:0;width:auto;font-size:22px;white-space:nowrap;letter-spacing:-1px}
-  .topbar .header-nav{grid-column:2;grid-row:1;display:flex;flex-wrap:nowrap;gap:3px;width:100%;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:0;touch-action:pan-x}
-  .topbar .header-nav::-webkit-scrollbar{display:none}
-  .topbar .nav-button{flex:0 0 auto;font-size:12px;height:32px;padding:0 8px;border-radius:10px}
-  .topbar .topbar-actions{grid-column:3;grid-row:1;gap:5px;flex:0 0 auto;min-width:max-content}
-  .topbar .search-action,.topbar .settings-action{height:34px;width:34px;min-width:34px;padding:0;border-radius:9px}
-  .topbar .search-action span{display:none}
-  .topbar .search-action svg,.topbar .settings-action svg{width:20px;height:20px}
-  .topbar .header-clock{font-size:17px;min-width:46px;letter-spacing:-.5px}
-  html[data-view=home] #app-content{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"toolbar hero" "catalog hero";gap:0 12px;padding:8px 10px 6px;min-height:0}
-  html[data-view=home] .shelf-toolbar{grid-area:toolbar;min-width:0;height:auto;min-height:38px;padding:0 0 5px;gap:5px}
-  html[data-view=home] .shelf-title{font-size:clamp(13px,2.15vw,19px);line-height:1.15;min-width:0;overflow-wrap:anywhere}
-  html[data-view=home] .shelf-actions{gap:4px;flex-shrink:0}
-  html[data-view=home] .shelf-count{font-size:11px;margin:0}
-  html[data-view=home] .shelf-arrow{width:27px;height:28px;border-radius:8px;font-size:15px;padding:0}
-  html[data-view=home] .shelf-more{width:auto;min-width:0;height:28px;margin:0;font-size:11px;padding:0 6px;border-radius:8px}
-  html[data-view=home] #home-rail{grid-area:catalog;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;align-items:start;gap:12px 10px;width:100%;height:100%;min-height:0;min-width:0;margin:0;padding:5px 5px 12px;overflow-x:hidden!important;overflow-y:auto!important;scroll-snap-type:none;scroll-padding:0;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-  html[data-view=home] #home-rail .poster-card{width:100%;min-width:0;flex:none;scroll-snap-align:none}
-  html[data-view=home] #home-rail .poster-cover{width:100%;height:auto;min-height:0;aspect-ratio:2/3;border-radius:8px}
-  html[data-view=home] #home-rail .poster-title{font-size:12px;margin-top:5px;line-height:1.25}
-  html[data-view=home] #home-rail .rating-pill{font-size:10px;padding:3px 5px;bottom:4px;left:4px}
-  html[data-view=home] #app-content>.empty{grid-area:catalog;min-width:0;overflow:auto}
-  html[data-view=home] .home-hero{grid-area:hero;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto minmax(0,1fr) auto;gap:6px 9px;align-items:start;width:100%;height:100%;min-height:0;max-height:none;margin:0;padding:10px;overflow:auto;border-radius:14px;touch-action:pan-y}
-  html[data-view=home] .hero-content{display:contents}
-  html[data-view=home] .hero-title{grid-column:1;grid-row:1;display:block;font-size:clamp(15px,2.4vw,21px);line-height:1.18;white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip;-webkit-line-clamp:unset;letter-spacing:-.2px;margin:0}
-  html[data-view=home] .hero-meta{grid-column:1;grid-row:2;font-size:12px;line-height:1.25;display:block;margin:0;align-self:start}
-  html[data-view=home] .hero-poster{grid-column:2;grid-row:1/3;width:clamp(58px,9vw,90px);height:auto;min-height:0;max-height:none;aspect-ratio:2/3;align-self:start;border-radius:7px}
-  html[data-view=home] .hero-desc{grid-column:1/-1;grid-row:3;display:block;max-width:100%;max-height:none;min-height:0;height:100%;font-size:13px;line-height:1.4;margin:0;overflow:auto;-webkit-line-clamp:unset;touch-action:pan-y;overscroll-behavior:contain}
-  html[data-view=home] .hero-buttons{grid-column:1/-1;grid-row:4;display:flex;flex-wrap:nowrap;gap:6px;width:100%;margin:0}
-  html[data-view=home] .hero-buttons .btn{flex:1 1 0;min-width:0;height:34px;padding:0 5px;font-size:12px;gap:3px;border-radius:9px}
+@media (orientation:landscape){
+  html[data-device=phone] .main-shell{max-width:none;width:100%;min-height:100%}
+  html[data-device=phone] .topbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:minmax(0,1fr);height:48px;min-height:48px;gap:8px;padding:0 10px}
+  html[data-device=phone] .topbar .brand{grid-column:1;grid-row:1;min-width:0;width:auto;font-size:22px;white-space:nowrap;letter-spacing:-1px}
+  html[data-device=phone] .topbar .header-nav{grid-column:2;grid-row:1;display:flex;flex-wrap:nowrap;gap:3px;width:100%;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:0;touch-action:pan-x}
+  html[data-device=phone] .topbar .header-nav::-webkit-scrollbar{display:none}
+  html[data-device=phone] .topbar .nav-button{flex:0 0 auto;font-size:12px;height:32px;padding:0 8px;border-radius:10px}
+  html[data-device=phone] .topbar .topbar-actions{grid-column:3;grid-row:1;gap:5px;flex:0 0 auto;min-width:max-content}
+  html[data-device=phone] .topbar .search-action,html[data-device=phone] .topbar .settings-action{height:34px;width:34px;min-width:34px;padding:0;border-radius:9px}
+  html[data-device=phone] .topbar .search-action span{display:none}
+  html[data-device=phone] .topbar .search-action svg,html[data-device=phone] .topbar .settings-action svg{width:20px;height:20px}
+  html[data-device=phone] .topbar .header-clock{font-size:17px;min-width:46px;letter-spacing:-.5px}
+  html[data-device=phone][data-view=home] #app-content{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"toolbar hero" "catalog hero";gap:0 12px;padding:8px 10px 6px;min-height:0}
+  html[data-device=phone][data-view=home] .shelf-toolbar{grid-area:toolbar;min-width:0;height:auto;min-height:38px;padding:0 0 5px;gap:5px}
+  html[data-device=phone][data-view=home] .shelf-title{font-size:clamp(13px,2.15vw,19px);line-height:1.15;min-width:0;overflow-wrap:anywhere}
+  html[data-device=phone][data-view=home] .shelf-actions{gap:4px;flex-shrink:0}
+  html[data-device=phone][data-view=home] .shelf-count{font-size:11px;margin:0}
+  html[data-device=phone][data-view=home] .shelf-arrow{width:27px;height:28px;border-radius:8px;font-size:15px;padding:0}
+  html[data-device=phone][data-view=home] .shelf-more{width:auto;min-width:0;height:28px;margin:0;font-size:11px;padding:0 6px;border-radius:8px}
+  html[data-device=phone][data-view=home] #home-rail{grid-area:catalog;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;align-items:start;gap:12px 10px;width:100%;height:100%;min-height:0;min-width:0;margin:0;padding:5px 5px 12px;overflow-x:hidden!important;overflow-y:auto!important;scroll-snap-type:none;scroll-padding:0;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  html[data-device=phone][data-view=home] #home-rail .poster-card{width:100%;min-width:0;flex:none;scroll-snap-align:none}
+  html[data-device=phone][data-view=home] #home-rail .poster-cover{width:100%;height:auto;min-height:0;aspect-ratio:2/3;border-radius:8px}
+  html[data-device=phone][data-view=home] #home-rail .poster-title{font-size:12px;margin-top:5px;line-height:1.25}
+  html[data-device=phone][data-view=home] #home-rail .rating-pill{font-size:10px;padding:3px 5px;bottom:4px;left:4px}
+  html[data-device=phone][data-view=home] #app-content>.empty{grid-area:catalog;min-width:0;overflow:auto}
+  html[data-device=phone][data-view=home] .home-hero{grid-area:hero;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto minmax(0,1fr) auto;gap:6px 9px;align-items:start;width:100%;height:100%;min-height:0;max-height:none;margin:0;padding:10px;overflow:auto;border-radius:14px;touch-action:pan-y}
+  html[data-device=phone][data-view=home] .hero-content{display:contents}
+  html[data-device=phone][data-view=home] .hero-title{grid-column:1;grid-row:1;display:block;font-size:clamp(15px,2.4vw,21px);line-height:1.18;white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip;-webkit-line-clamp:unset;letter-spacing:-.2px;margin:0}
+  html[data-device=phone][data-view=home] .hero-meta{grid-column:1;grid-row:2;font-size:12px;line-height:1.25;display:block;margin:0;align-self:start}
+  html[data-device=phone][data-view=home] .hero-poster{grid-column:2;grid-row:1/3;width:clamp(58px,9vw,90px);height:auto;min-height:0;max-height:none;aspect-ratio:2/3;align-self:start;border-radius:7px}
+  html[data-device=phone][data-view=home] .hero-desc{grid-column:1/-1;grid-row:3;display:block;max-width:100%;max-height:none;min-height:0;height:100%;font-size:13px;line-height:1.4;margin:0;overflow:auto;-webkit-line-clamp:unset;touch-action:pan-y;overscroll-behavior:contain}
+  html[data-device=phone][data-view=home] .hero-buttons{grid-column:1/-1;grid-row:4;display:flex;flex-wrap:nowrap;gap:6px;width:100%;margin:0}
+  html[data-device=phone][data-view=home] .hero-buttons .btn{flex:1 1 0;min-width:0;height:34px;padding:0 5px;font-size:12px;gap:3px;border-radius:9px}
 }
-@media (orientation:landscape) and (max-height:540px) and (max-width:670px){
-  html[data-view=home] #home-rail{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .topbar{gap:5px;padding:0 6px}.topbar .brand{font-size:19px}
-  .topbar .nav-button{font-size:11px;padding:0 6px}
-  html[data-view=home] #app-content{gap:0 8px;padding-inline:7px}
-  html[data-view=home] .shelf-toolbar{flex-wrap:wrap;justify-content:flex-start}
-  html[data-view=home] .hero-buttons .btn{font-size:11px;padding:0 3px}
+@media (orientation:landscape) and (max-width:670px){
+  html[data-device=phone][data-view=home] #home-rail{grid-template-columns:repeat(2,minmax(0,1fr))}
+  html[data-device=phone] .topbar{gap:5px;padding:0 6px}html[data-device=phone] .topbar .brand{font-size:19px}
+  html[data-device=phone] .topbar .nav-button{font-size:11px;padding:0 6px}
+  html[data-device=phone][data-view=home] #app-content{gap:0 8px;padding-inline:7px}
+  html[data-device=phone][data-view=home] .shelf-toolbar{flex-wrap:wrap;justify-content:flex-start}
+  html[data-device=phone][data-view=home] .hero-buttons .btn{font-size:11px;padding:0 3px}
 }

@@ -1,8 +1,10 @@
 import { isBuiltinWallpaper } from './builtin-wallpapers.js';
-import { homeRailMetrics, wheelCardIndex } from './desktop-layout.js';
+import { homeRailMetrics, wheelCardIndex, isPhoneDevice } from './desktop-layout.js';
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
 import { episodeChoices, providerEpisodeFrames } from './episode-choices.js';
 import { voiceChoices, preferredVoiceIndex, voiceResumeTime } from './voice-choices.js';
+const isPhone=isPhoneDevice(navigator);
+document.documentElement.dataset.device=isPhone?'phone':'non-phone';
 const $ = selector => document.querySelector(selector);
 const content = $('#app-content');
 const modal = $('#modal-root');
@@ -517,7 +519,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.50 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.51 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -948,11 +950,12 @@ document.addEventListener('click',async event=>{
   if(action.hasAttribute('data-clear-local')){if(confirm('Видалити все вибране, збережені потоки та прогрес перегляду?')){state.favorites={};state.progress={};state.sources={};state.history={};state.episodeProgress={};state.lastEpisode={};save();renderSettings();toast('Локальні дані очищено');}return;}
 });
 // Desktop home: fit whole posters to the visible rail, and map wheel to card scrolling.
-const phoneLandscape=matchMedia('(orientation: landscape) and (max-height: 540px) and (max-width: 1100px)');
+const phoneOrientation=matchMedia('(orientation: landscape)');
+const phoneLandscape=()=>isPhone&&phoneOrientation.matches;
 let observedHomeRail=null,homeRailObserver=null,wheelRail=null,wheelTarget=0,wheelTime=0,wheelDelta=0;
 function fitHomeRail(){
   const rail=observedHomeRail;
-  if(!rail?.isConnected||phoneLandscape.matches||!matchMedia('(min-width:761px)').matches){rail?.style.removeProperty('--rail-card-width');return;}
+  if(!rail?.isConnected||phoneLandscape()||!matchMedia('(min-width:761px)').matches){rail?.style.removeProperty('--rail-card-width');return;}
   const css=getComputedStyle(rail),gap=parseFloat(css.columnGap)||0;
   const width=rail.clientWidth-(parseFloat(css.paddingLeft)||0)-(parseFloat(css.paddingRight)||0);
   const height=rail.clientHeight-(parseFloat(css.paddingTop)||0)-(parseFloat(css.paddingBottom)||0);
@@ -967,9 +970,9 @@ function observeHomeRail(){
   if(typeof ResizeObserver==='function'){homeRailObserver=new ResizeObserver(fitHomeRail);homeRailObserver.observe(observedHomeRail);}
 }
 window.addEventListener('resize',fitHomeRail,{passive:true});
-phoneLandscape.addEventListener?.('change',()=>{const rail=$('#home-rail');if(rail){rail.scrollTop=0;rail.scrollLeft=0;}fitHomeRail();});
+phoneOrientation.addEventListener?.('change',()=>{if(!isPhone)return;const rail=$('#home-rail');if(rail){rail.scrollTop=0;rail.scrollLeft=0;}fitHomeRail();});
 document.addEventListener('wheel',event=>{
-  if(state.view!=='home'||modal.innerHTML||phoneLandscape.matches||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
+  if(state.view!=='home'||modal.innerHTML||phoneLandscape()||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
   const rail=$('#home-rail');
   if(!rail||rail.scrollWidth<=rail.clientWidth||Math.abs(event.deltaX)>=Math.abs(event.deltaY)||!event.deltaY)return;
   const first=rail.querySelector('.poster-card');if(!first)return;
@@ -989,8 +992,8 @@ document.addEventListener('wheel',event=>{
 },{passive:false});
 document.addEventListener('pointerover',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
 document.addEventListener('focusin',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
-let swipeY=0,swipeX=0;document.addEventListener('touchstart',event=>{if(!phoneLandscape.matches&&event.target.closest('#home-rail')){swipeY=event.touches[0].clientY;swipeX=event.touches[0].clientX;}else swipeY=0;},{passive:true});
-document.addEventListener('touchend',event=>{if(phoneLandscape.matches){swipeY=0;return;}if(!swipeY||!event.changedTouches[0])return;const dy=event.changedTouches[0].clientY-swipeY,dx=event.changedTouches[0].clientX-swipeX;swipeY=0;if(Math.abs(dy)>65&&Math.abs(dy)>Math.abs(dx)*1.25){state.homeShelf=((state.homeShelf||0)+(dy<0?1:-1)+HOME_SHELVES.length)%HOME_SHELVES.length;renderHome();}},{passive:true});
+let swipeY=0,swipeX=0;document.addEventListener('touchstart',event=>{if(!phoneLandscape()&&event.target.closest('#home-rail')){swipeY=event.touches[0].clientY;swipeX=event.touches[0].clientX;}else swipeY=0;},{passive:true});
+document.addEventListener('touchend',event=>{if(phoneLandscape()){swipeY=0;return;}if(!swipeY||!event.changedTouches[0])return;const dy=event.changedTouches[0].clientY-swipeY,dx=event.changedTouches[0].clientX-swipeX;swipeY=0;if(Math.abs(dy)>65&&Math.abs(dy)>Math.abs(dx)*1.25){state.homeShelf=((state.homeShelf||0)+(dy<0?1:-1)+HOME_SHELVES.length)%HOME_SHELVES.length;renderHome();}},{passive:true});
 function updateClock(){const clock=$('#header-clock');if(clock)clock.textContent=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});}updateClock();setInterval(updateClock,30000);
 document.addEventListener('input',event=>{
   if(event.target.id==='search-input'){state.searchQuery=event.target.value;clearTimeout(state.searchTimer);state.searchTimer=setTimeout(performSearch,320);}
@@ -1063,7 +1066,7 @@ init();
 let homeTouchX=0,homeTouchY=0;
 document.addEventListener('touchstart',event=>{if(event.touches.length===1){homeTouchX=event.touches[0].clientX;homeTouchY=event.touches[0].clientY;}},{passive:true});
 document.addEventListener('touchmove',event=>{
-  if(state.view!=='home'||modal.innerHTML||phoneLandscape.matches||event.touches.length!==1)return;
+  if(state.view!=='home'||modal.innerHTML||phoneLandscape()||event.touches.length!==1)return;
   const dx=Math.abs(event.touches[0].clientX-homeTouchX),dy=Math.abs(event.touches[0].clientY-homeTouchY);
   if(dy>dx&&event.cancelable)event.preventDefault();
 },{passive:false});
