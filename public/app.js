@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.36 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.37 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -753,11 +753,11 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
       <div class="switch-player-panel" id="switch-player-panel"><div class="switch-player-seek"><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
       <div class="switch-player-bottom">
         <label class="switch-volume" title="Гучність"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M16 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/></svg><input type="range" id="player-volume" min="0" max="1" step="0.01" value="${state.playerVolume}" aria-label="Гучність" style="--volume-fill:${state.playerVolume*100}%"></label>
-        <div class="switch-player-actions"><button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд" title="Назад 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15.5 5-7 7 7 7"/></svg></button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Відтворити">${transportPlayIcon(true)}</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд" title="Вперед 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8.5 5 7 7-7 7"/></svg></button></div>
+        <div class="switch-player-actions${item.type==='tv'?' series-transport':''}">${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="-1" aria-label="Попередня серія" title="Попередня серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 6-6 6 6 6m8-12-6 6 6 6"/></svg></button>':''}<button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд" title="Назад 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15.5 5-7 7 7 7"/></svg></button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Відтворити">${transportPlayIcon(true)}</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд" title="Вперед 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8.5 5 7 7-7 7"/></svg></button>${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="1" aria-label="Наступна серія" title="Наступна серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 6 6 6-6 6m8-12 6 6-6 6"/></svg></button>':''}</div>
         <div class="switch-player-tools"><button type="button" class="switch-player-tool" data-player-settings aria-controls="player-settings" aria-expanded="false" aria-label="Налаштування плеєра" title="Налаштування">${icon('settings')}</button><button type="button" class="switch-fullscreen switch-player-tool" data-fullscreen aria-label="Повний екран" title="Повний екран"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
       </div></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
-    <section id="player-settings" class="player-settings-menu" role="region" aria-label="Налаштування плеєра" hidden><div class="player-settings-heading"><h3>Налаштування</h3><button type="button" class="player-settings-close" data-close-player-settings aria-label="Закрити налаштування">${icon('close')}</button></div><div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div></section>
+    <section id="player-settings" class="player-settings-menu" role="region" aria-label="Налаштування плеєра" hidden><div class="player-settings-heading"><h3>Налаштування</h3><button type="button" class="player-settings-close" data-close-player-settings aria-label="Закрити налаштування">${icon('close')}</button></div><div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div></div></section>
     <div class="player-help" id="player-help">${presetUrl?'Потік з джерела. Натисніть ▶, якщо Safari не дозволив автоматичний запуск.':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
     </section></div>`;
   const video=$('#video');
@@ -858,22 +858,31 @@ function refreshMediaOptions(){
   fill('#player-track',Array.from(h?.subtitleTracks?.length?h.subtitleTracks:v.textTracks||[]).map((x,i)=>[i,x.name||x.label||x.lang||x.language||('Доріжка '+(i+1))]),'Вимкнено');
 }
 async function stepEpisode(delta){
-  const item=state.activePlayer?.item;
-  if(!item||item.type!=='tv')return;
-  const season=state.activePlayer.season,episode=state.activePlayer.episode,provider=state.activeProvider;
+  const player=state.activePlayer,item=player?.item;
+  if(!item||item.type!=='tv'||player.episodePending)return;
+  player.episodePending=true;
+  const season=player.season,episode=player.episode,provider=state.activeProvider;
+  const buttons=[...modal.querySelectorAll('[data-episode-step]')];
+  buttons.forEach(b=>b.disabled=true);
+  setPlayerControls(true);
   try{
     const data=await api('/api/title/tv/'+item.id+'/season/'+season);
+    if(state.activePlayer!==player)return;
     const numbers=(data.episodes||[]).map(e=>e.number).sort((a,b)=>a-b);
-    let next=numbers[numbers.indexOf(episode)+delta],nextSeason=season;
+    const index=numbers.indexOf(episode);
+    if(index<0)return toast('Не вдалося визначити поточну серію');
+    let next=numbers[index+delta],nextSeason=season;
     if(!next){
       nextSeason=season+delta;if(nextSeason<1)return toast('Інших серій немає');
       const other=await api('/api/title/tv/'+item.id+'/season/'+nextSeason);
+      if(state.activePlayer!==player)return;
       const list=(other.episodes||[]).map(e=>e.number).sort((a,b)=>a-b);next=delta>0?list[0]:list.at(-1);
     }
     if(!next)return toast('Інших серій немає');
     state.selectedSeason=nextSeason;state.selectedEpisode=next;showSources(item);
     if(provider&&!state.disabledProviders.includes(provider))loadProvider(provider);
-  }catch(e){toast(e.message);}
+  }catch(e){if(state.activePlayer===player)toast(e.message);}
+  finally{player.episodePending=false;if(state.activePlayer===player){buttons.forEach(b=>b.disabled=false);setPlayerControls(true,3000);}}
 }
 function closeModal(){wallpaperGallery?.observer?.disconnect();cleanupPlayer();modal.innerHTML='';state.activePlayer=null;runDownloadQueue();}
 
