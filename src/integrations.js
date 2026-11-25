@@ -252,7 +252,8 @@ async function wallpapers(params,env={},request){
       if(!response.ok)throw new Error('Wallhaven повернув HTTP '+response.status);
       const payload=await response.json();
       if(!Array.isArray(payload.data))throw new Error('Некоректна відповідь Wallhaven');
-      const data={page,wallpapers:payload.data.slice(0,24).map(p=>({id:clean(p.id,20),thumb:p.thumbs?.large||null,image:p.path||null,resolution:p.resolution||''})).filter(p=>p.image?.startsWith('https://w.wallhaven.cc/'))};
+      const lastPage=Number(payload.meta?.last_page);const hasMore=page<30&&(Number.isFinite(lastPage)&&lastPage>=0?page<lastPage:payload.data.length>=24);
+      const data={page,hasMore,wallpapers:payload.data.slice(0,24).map(p=>({id:clean(p.id,20),thumb:p.thumbs?.large||null,image:p.path||null,resolution:p.resolution||''})).filter(p=>p.image?.startsWith('https://w.wallhaven.cc/'))};
       const saved={savedAt:Date.now(),data};
       wallpaperMemo.set(key,saved);
       if(wallpaperMemo.size>80)wallpaperMemo.delete(wallpaperMemo.keys().next().value);

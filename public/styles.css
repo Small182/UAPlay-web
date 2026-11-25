@@ -247,3 +247,5 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
 .page-intro .page-close svg{width:24px;height:24px}
 .page-intro .page-close:hover{filter:brightness(1.15)}
 @media(max-width:760px){.page-intro .page-close{width:42px;height:42px;border-radius:11px}}
+
+.wallpaper-sentinel{height:1px;pointer-events:none}.wallpaper-status{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;color:var(--muted);font-size:14px;padding:8px 0 14px}.wallpaper-status:empty{display:none}.wallpaper-status .btn{height:38px;min-width:0;font-size:14px}

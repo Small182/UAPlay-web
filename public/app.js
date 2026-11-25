@@ -80,31 +80,108 @@ function applyWallpaper(){
   document.body.style.backgroundImage='none';
 }
 async function openWallpapers(){
-  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal source-modal" role="dialog" aria-modal="true" aria-label="Шпалери UAPlay"><button class="close-modal" data-close aria-label="Закрити">${icon('close')}</button><h2>Шпалери</h2><p class="section-note">Галерея Wallhaven · Безпечний пошук. Вбудовані шпалери доступні без зовнішнього API.</p><form id="wallpaper-form" class="player-form"><input id="wallpaper-query" class="input-line" placeholder="Пошук шпалер" maxlength="70"><button class="btn primary" type="submit">Шукати</button></form><div id="wallpaper-results">Завантаження…</div><button class="btn secondary" data-wallpaper-reset>Стандартний фон</button></section></div>`;
+  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal source-modal wallpaper-modal" role="dialog" aria-modal="true" aria-label="Шпалери UAPlay"><button class="close-modal" data-close aria-label="Закрити">${icon('close')}</button><h2>Шпалери</h2><p class="section-note">Галерея Wallhaven · Безпечний пошук. Вбудовані шпалери доступні без зовнішнього API.</p><form id="wallpaper-form" class="player-form"><input id="wallpaper-query" class="input-line" placeholder="Пошук шпалер" maxlength="70"><button class="btn primary" type="submit">Шукати</button></form><div id="wallpaper-results">Завантаження…</div><button class="btn secondary" data-wallpaper-reset>Стандартний фон</button></section></div>`;
   loadWallpapers('');
 }
 const wallpaperBrowserCache=new Map();
-let wallpaperRequest=0,wallpaperRetryAt=0;
+let wallpaperRequest=0,wallpaperRetryAt=0,wallpaperGallery=null;
+function wallpaperCard(w){
+  return `<button class="wallpaper-pick" type="button" data-set-wallpaper="${safe(w.image)}"><img src="${safe(isBuiltinWallpaper(w.thumb)?w.thumb:externalImageUrl(w.thumb))}" alt="Шпалери ${safe(w.id)}" loading="lazy"><span>${safe(w.name||w.resolution)}</span></button>`;
+}
+function wallpaperGalleryActive(g){return g===wallpaperGallery&&g.seq===wallpaperRequest&&g.el.isConnected;}
+function wallpaperStatus(g,message='',retry=false){
+  if(!wallpaperGalleryActive(g))return;
+  g.status.innerHTML=`${message?safe(message):''}${retry?'<button class="btn secondary" type="button" data-wallpaper-retry>Повторити</button>':''}`;
+}
+function wallpaperAppend(g,rows){
+  let added=0;
+  for(const row of rows){
+    if(!row?.image||g.seen.has(row.image))continue;
+    g.seen.add(row.image);g.grid.insertAdjacentHTML('beforeend',wallpaperCard(row));added++;
+  }
+  return added;
+}
 async function loadWallpapers(query){
   const el=$('#wallpaper-results');if(!el)return;
-  query=query.trim();const seq=++wallpaperRequest;
-  const submit=$('#wallpaper-form button[type=submit]');
-  const key='uaplay-wallpapers-v1:'+query;
+  wallpaperGallery?.observer?.disconnect();
+  const seq=++wallpaperRequest;
+  const root=el.closest('.wallpaper-modal');
+  el.innerHTML='<div class="wallpaper-grid"></div><div class="wallpaper-status" aria-live="polite"></div><div class="wallpaper-sentinel" aria-hidden="true"></div>';
+  const g={el,root,seq,query:query.trim(),page:1,seen:new Set(),loading:false,more:true,paused:false,local:false,grid:el.querySelector('.wallpaper-grid'),status:el.querySelector('.wallpaper-status'),sentinel:el.querySelector('.wallpaper-sentinel')};
+  wallpaperGallery=g;
+  if(root)root.scrollTop=0;
+  if(typeof IntersectionObserver==='function'){
+    g.observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)&&wallpaperGalleryActive(g))loadNextWallpapers(g);},{root,rootMargin:'0px 0px 200px 0px'});
+  }
+  await loadNextWallpapers(g);
+}
+function wallpaperWatch(g){
+  if(!wallpaperGalleryActive(g))return;
+  g.observer?.disconnect();
+  if(!g.more||g.paused)return;
+  g.observer?.observe(g.sentinel);
+}
+async function loadNextWallpapers(g){
+  if(!wallpaperGalleryActive(g)||g.loading||!g.more||g.paused)return;
+  g.loading=true;g.observer?.disconnect();
+  const page=g.page;
+  const key='uaplay-wallpapers-v1:'+g.query+(page===1?'':':page:'+page);
   let saved=wallpaperBrowserCache.get(key);try{saved=saved||JSON.parse(localStorage.getItem(key)||'null');}catch{}
   if(saved&&Date.now()-saved.time>7*86400000)saved=null;
-  const render=(rows,notice='')=>{if(!el.isConnected||seq!==wallpaperRequest)return;const fallback=!rows.length;if(fallback){rows=builtinWallpapers(query);notice=(notice?notice+' ':'')+'Показано вбудовані шпалери UAPlay.';}el.innerHTML=`${notice?`<p class="section-note">${safe(notice)}</p>`:''}${rows.length?`<div class="wallpaper-grid">${rows.map(w=>`<button class="wallpaper-pick" type="button" data-set-wallpaper="${safe(w.image)}"><img src="${safe(isBuiltinWallpaper(w.thumb)?w.thumb:externalImageUrl(w.thumb))}" alt="Шпалери ${safe(w.id)}" loading="lazy"><span>${safe(w.name||w.resolution)}</span></button>`).join('')}</div>`:'<p class="section-note">Немає доступних шпалер для цього запиту.</p>'}`;};
-  if(saved&&Date.now()-saved.time<30*60000){render(saved.rows);return;}
-  if(Date.now()<wallpaperRetryAt){render(saved?.rows||[],'Wallhaven тимчасово обмежив запити. Повторіть пошук пізніше.');return;}
-  render(saved?.rows||[],'Оновлюємо галерею Wallhaven…');
-  if(submit)submit.disabled=true;
+  function localFallback(){
+    if(g.seen.size||g.local)return;
+    g.local=true;g.grid.innerHTML='';wallpaperAppend(g,builtinWallpapers(g.query));
+  }
+  function accept(rows,hasMore,notice=''){
+    if(g.local){g.grid.innerHTML='';g.seen.clear();g.local=false;}
+    const added=wallpaperAppend(g,rows);
+    g.page=page+1;g.more=page<30&&hasMore&&added>0;
+    wallpaperStatus(g,notice||(!g.more?(g.seen.size?'Усі доступні шпалери завантажено.':'Немає шпалер за цим запитом.'):''));
+  }
   try{
-    const data=await api(`/api/wallpapers?q=${encodeURIComponent(query)}`);
-    if(data.rateLimited)wallpaperRetryAt=Date.now()+Math.max(60,Number(data.retryAfter)||120)*1000;
+    if(saved&&Date.now()-saved.time<30*60000){
+      accept(saved.rows,saved.hasMore??saved.rows.length>=24);
+      return;
+    }
+    if(Date.now()<wallpaperRetryAt){
+      if(saved?.rows?.length)accept(saved.rows,saved.hasMore??saved.rows.length>=24);
+      else localFallback();
+      g.paused=true;
+      wallpaperStatus(g,'Wallhaven тимчасово обмежив запити. Повторіть пізніше.',true);
+      return;
+    }
+    wallpaperStatus(g,'Завантаження шпалер…');
+    const data=await api('/api/wallpapers?q='+encodeURIComponent(g.query)+'&page='+page);
+    if(!wallpaperGalleryActive(g))return;
     const rows=Array.isArray(data.wallpapers)?data.wallpapers:[];
-    if(!data.stale&&!data.rateLimited){const value={time:Date.now(),rows};wallpaperBrowserCache.set(key,value);try{localStorage.setItem(key,JSON.stringify(value));}catch{}}
-    render(rows.length?rows:(data.stale||data.rateLimited?saved?.rows||[]:[]),data.notice||'');
-  }catch(e){render(saved?.rows||[],e.message);}
-  finally{if(submit&&seq===wallpaperRequest)submit.disabled=false;}
+    const hasMore=data.hasMore??rows.length>=24;
+    if(data.rateLimited)wallpaperRetryAt=Date.now()+Math.max(60,Number(data.retryAfter)||120)*1000;
+    if(data.rateLimited||data.stale){
+      const usable=rows.length?rows:saved?.rows||[];
+      if(usable.length)accept(usable,data.hasMore??saved?.hasMore??usable.length>=24);
+      else localFallback();
+      g.paused=true;wallpaperStatus(g,data.notice||'Wallhaven тимчасово недоступний.',true);
+      return;
+    }
+    const value={time:Date.now(),rows,hasMore};
+    wallpaperBrowserCache.set(key,value);if(wallpaperBrowserCache.size>80)wallpaperBrowserCache.delete(wallpaperBrowserCache.keys().next().value);
+    try{localStorage.setItem(key,JSON.stringify(value));}catch{}
+    accept(rows,hasMore);
+  }catch(e){
+    if(!wallpaperGalleryActive(g))return;
+    if(saved?.rows?.length)accept(saved.rows,saved.hasMore??saved.rows.length>=24);
+    else localFallback();
+    g.paused=true;wallpaperStatus(g,e.message||'Не вдалося завантажити шпалери.',true);
+  }finally{
+    g.loading=false;wallpaperWatch(g);
+  }
+}
+function retryWallpapers(){
+  const g=wallpaperGallery;if(!g||!wallpaperGalleryActive(g)||g.loading)return;
+  if(Date.now()<wallpaperRetryAt){wallpaperStatus(g,'Повторіть через '+Math.ceil((wallpaperRetryAt-Date.now())/1000)+' с.',true);return;}
+  g.paused=false;
+  if(!g.more){wallpaperStatus(g,'Усі доступні шпалери завантажено.');return;}
+  loadNextWallpapers(g);
 }
 async function findSubtitles(){
   const item=state.activePlayer?.item;
@@ -457,7 +534,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.31 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.32 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -790,7 +867,7 @@ async function stepEpisode(delta){
     if(provider&&!state.disabledProviders.includes(provider))loadProvider(provider);
   }catch(e){toast(e.message);}
 }
-function closeModal(){cleanupPlayer();modal.innerHTML='';state.activePlayer=null;runDownloadQueue();}
+function closeModal(){wallpaperGallery?.observer?.disconnect();cleanupPlayer();modal.innerHTML='';state.activePlayer=null;runDownloadQueue();}
 
 async function init() {
   applyAccent();buildNav();
@@ -846,6 +923,7 @@ document.addEventListener('click',async event=>{
   if(action.hasAttribute('data-iptv-favorites')){state.iptvOnlyFavorites=!state.iptvOnlyFavorites;state.iptvGroup='';action.textContent=state.iptvOnlyFavorites?'Усі канали':'☆ Вибране';action.setAttribute('aria-pressed',String(state.iptvOnlyFavorites));paintChannels();return;}
   if(action.dataset.channel!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channel)];if(c)openPlayer({id:Number(action.dataset.channel),type:'iptv',title:c.name},c.url);return;}
   if(action.hasAttribute('data-wallpapers')){openWallpapers();return;}
+  if(action.hasAttribute('data-wallpaper-retry')){retryWallpapers();return;}
   if(action.dataset.setWallpaper){state.wallpaper=action.dataset.setWallpaper;save();applyWallpaper();closeModal();toast('Шпалери застосовано');return;}
   if(action.hasAttribute('data-wallpaper-reset')){state.wallpaper='';save();applyWallpaper();closeModal();toast('Стандартний фон');return;}
   if(action.hasAttribute('data-subtitles')){findSubtitles();return;}

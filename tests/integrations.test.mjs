@@ -183,6 +183,22 @@ test('UASerials movies still respect release years in the URL',async()=>{
  });
 });
 
+
+test('Wallhaven pagination returns last-page metadata and distinct query pages',async()=>{
+ let calls=0;
+ await withMockFetch(async url=>{
+   calls++;
+   const page=Number(new URL(url).searchParams.get('page'));
+   return new Response(JSON.stringify({meta:{current_page:page,last_page:2},data:[{id:'page'+page,path:'https://w.wallhaven.cc/full/page'+page+'.jpg',thumbs:{large:'https://th.wallhaven.cc/page'+page+'.jpg'}}]}));
+ },async()=>{
+   const run=page=>handleIntegration(req('/api/wallpapers?q=pagination-test&page='+page),{}).then(r=>r.json());
+   const first=await run(1),second=await run(2);
+   assert.equal(first.hasMore,true);assert.equal(second.hasMore,false);
+   assert.notEqual(first.wallpapers[0].id,second.wallpapers[0].id);
+   assert.equal((await run(2)).cached,true);assert.equal(calls,2);
+ });
+});
+
 test('Wallhaven caches successful repeated queries and observes upstream cooldown',async()=>{
  let calls=0;
  await withMockFetch(async(url,options)=>{
