@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {homeRailMetrics,wheelCardIndex,isPhoneDevice} from '../public/desktop-layout.js';
+import {homeRailMetrics,wheelCardIndex,isPhoneDevice,isTabletDevice,useMobileShelves} from '../public/desktop-layout.js';
 test('whole desktop cards fill the visible rail without partial next card',()=>{
  for(const [w,h,g] of [[1200,410,20],[1840,500,24],[760,250,12]]){
   const {columns,cardWidth}=homeRailMetrics(w,h,g);
@@ -29,4 +29,22 @@ test('landscape split layout is reserved for phones, not tablets or desktops',()
  assert.equal(isPhoneDevice({userAgent:'Mozilla/5.0 (Linux; Android 15) Safari'}),false);
  assert.equal(isPhoneDevice({userAgent:'Mozilla/5.0 (Windows NT 10.0) Chrome',maxTouchPoints:10,userAgentData:{mobile:false}}),false);
  assert.equal(isPhoneDevice({userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X) Safari',platform:'MacIntel',maxTouchPoints:0}),false);
+});
+
+test('portrait tablets use mobile shelves, landscape tablets and desktops keep desktop shelves',()=>{
+ const ipad={userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Safari',platform:'MacIntel',maxTouchPoints:5};
+ const android={userAgent:'Mozilla/5.0 (Linux; Android 15) Safari',userAgentData:{mobile:false}};
+ const iphone={userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile Safari',platform:'iPhone',maxTouchPoints:5};
+ const pc={userAgent:'Mozilla/5.0 (Windows NT 10.0) Chrome',maxTouchPoints:10,userAgentData:{mobile:false}};
+ for(const device of [ipad,android,{userAgent:'Mozilla/5.0 (iPad; CPU OS 18_0) Safari'}]){
+  assert.equal(isTabletDevice(device),true);
+  assert.equal(useMobileShelves(isPhoneDevice(device),isTabletDevice(device),false),true);
+  assert.equal(useMobileShelves(isPhoneDevice(device),isTabletDevice(device),true),false);
+ }
+ assert.equal(isTabletDevice(iphone),false);
+ assert.equal(isTabletDevice(pc),false);
+ assert.equal(useMobileShelves(true,false,true),true);
+ assert.equal(useMobileShelves(true,false,false),true);
+ assert.equal(useMobileShelves(false,false,false),false);
+ assert.equal(useMobileShelves(false,false,true),false);
 });

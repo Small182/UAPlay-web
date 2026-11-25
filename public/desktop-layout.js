@@ -20,3 +20,15 @@ export function isPhoneDevice({userAgent='',platform='',maxTouchPoints=0,userAge
   if(typeof userAgentData?.mobile==='boolean')return userAgentData.mobile;
   return /Android/i.test(ua)&&/\bMobile\b/i.test(ua);
 }
+
+// iPadOS desktop-mode UA and Android tablets must remain distinct from PCs.
+export function isTabletDevice(info={}){
+  if(isPhoneDevice(info))return false;
+  const {userAgent='',platform='',maxTouchPoints=0}=info;
+  return /\b(?:iPad|Tablet|PlayBook|Kindle|Silk)\b/i.test(userAgent)||
+    (/Macintosh/i.test(userAgent)||/^Mac/i.test(platform))&&maxTouchPoints>1||
+    /Android/i.test(userAgent);
+}
+export function useMobileShelves(phone,tablet,landscape){
+  return phone||tablet&&!landscape;
+}
