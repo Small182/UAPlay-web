@@ -68,14 +68,16 @@ function normalizedTitle(s){
 }
 function baseCatalogueTitle(s,provider=''){
   // UASerials publishes full-series cards with a season range in the label.
-  if(provider==='uaserials')s=String(s||'').replace(/\b\d{1,3}\s*[-–—]\s*\d{1,3}\s*(?:сезон(?:и|ів)?|seasons?)/gi,' ');
+  if(['uaserials','eneyida'].includes(provider))s=String(s||'').replace(/\b\d{1,3}\s*[-–—]\s*\d{1,3}\s*(?:сезон(?:и|ів)?|seasons?)/gi,' ');
   return normalizedTitle(s).replace(/\s+(?:(?:season|сезон|sezon)\s+\d+|\d+\s+(?:season|сезон|sezon))(?:\s.*)?$/i,'')
     .replace(/\s+(?:онлайн|дивитися|дивитись|watch)(?:\s.*)?$/i,'')
     .replace(/\b(?:19|20)\d{2}\b/g,' ').replace(/\s+/g,' ').trim();
 }
 function catalogueYear(title,url){
   const explicit=String(title||'').match(/(?:\(|[·–—]\s*|\s)((?:19|20)\d{2})(?:\)|\s*$)/);
-  const path=String(url||'').match(/[-_/]((?:19|20)\d{2})(?:[-_.][a-z]*)?\.html$/i);
+  // The numeric prefix of a DLE article slug is an ID, not a release year.
+  const filename=String(url||'').split('/').pop().replace(/^\d+-/,'');
+  const path=filename.match(/[-_]((?:19|20)\d{2})(?:[-_.][a-z]*)?\.html$/i);
   return Number(explicit?.[1]||path?.[1])||null;
 }
 function catalogueSeason(title){
@@ -109,14 +111,14 @@ function rankSources(results,local,original='',strict=false,year=0,type='',seaso
     if(b.length>=6&&n.includes(b))return 28;
     return 0;
   }));
-  const ranked=results.map(item=>({item,score:score(item),year:catalogueYear(item.title,item.provider==='uaserials'&&type==='tv'?'':item.url),season:catalogueSeason(item.title)||catalogueSeason(item.url)})).sort((x,y)=>y.score-x.score);
+  const ranked=results.map(item=>({item,score:score(item),year:catalogueYear(item.title,['uaserials','eneyida'].includes(item.provider)&&type==='tv'?'':item.url),season:catalogueSeason(item.title)||catalogueSeason(item.url)})).sort((x,y)=>y.score-x.score);
   let compatible=ranked.filter(x=>{
     if(type==='tv'&&season>0&&x.season&&x.season!==season)return false;
     if(type==='movie'&&strict&&x.season)return false;
     if(!x.year||year<1900)return true;
     if(type==='movie')return Math.abs(x.year-year)<=1;
     if(type==='tv'){
-      if(x.item.provider==='uaserials'&&!x.season)return Math.abs(x.year-year)<=1;
+      if(['uaserials','eneyida'].includes(x.item.provider)&&!x.season)return Math.abs(x.year-year)<=1;
       if(x.season&&x.season>1)return seasonYear>=1900?Math.abs(x.year-seasonYear)<=1:x.year>=year-1;
       if(x.season===1||season===1)return Math.abs(x.year-year)<=1;
       return x.year>=year-1&&(Math.abs(x.year-year)<=1||!seasonYear||Math.abs(x.year-seasonYear)<=1);
@@ -124,9 +126,9 @@ function rankSources(results,local,original='',strict=false,year=0,type='',seaso
     return true;
   });
   const top=compatible[0]?.score||0;
-  let relevant=compatible.filter(x=>['uaserials','uafilm'].includes(x.item.provider)&&type==='movie'
+  let relevant=compatible.filter(x=>['uaserials','uafilm','eneyida'].includes(x.item.provider)&&type==='movie'
     ?exactMovieMatch(x.item,local,original,year)&&(!year||!x.year||x.year===year)
-    :top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true);
+    :x.item.provider==='eneyida'&&type==='tv'?x.score>=110:top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true);
   if(type==='tv'&&season>0)relevant.sort((x,y)=>Number(y.season===season)-Number(x.season===season)||y.score-x.score);
   return relevant.map(x=>({...x.item,year:x.year,season:x.season}));
 }
@@ -253,13 +255,26 @@ function parseHtmlSearch(provider,html,type='') {
       if(link)add(attr(link[0],'href'),label);
     }
   }
-  // Eneyida stores its title and anchor within the same article.
+  // Eneyida: read original title only from the same unambiguous article.
   if(provider==='eneyida'){
     for(const a of html.matchAll(/<article\b[^>]*>[\s\S]*?<\/article\s*>/gi)){
-      const label=classLabel(a[0],'short_title');if(!label)continue;
-      for(const link of a[0].matchAll(/<a\b[^>]*>/gi)){
-        const href=attr(link[0],'href');if(articleLink(provider,href,type)){add(href,label);break;}
-      }
+      const piece=a[0];
+      const links=[...piece.matchAll(/<a\b[^>]*>[\s\S]*?<\/a\s*>/gi)].map(x=>{
+        const opening=x[0].slice(0,x[0].indexOf('>')+1);
+        const url=articleLink(provider,attr(opening,'href'),type);
+        const titleLink=attr(opening,'class').split(/\s+/).includes('short_title')||!!classLabel(x[0],'short_title(?![-_])');
+        return {url,titleLink};
+      }).filter(x=>x.url);
+      const preferred=[...new Set(links.filter(x=>x.titleLink).map(x=>x.url))];
+      const all=[...new Set(links.map(x=>x.url))];
+      const url=preferred.length===1?preferred[0]:all.length===1?all[0]:null;
+      if(!url)continue;
+      const label=classLabel(piece,'short_title(?![-_])');
+      const original=htmlPlain(classLabel(piece,'short_title_(?:eng|en|original)|short_(?:original|orig|oname)|original[-_]title|th-title-oname'));
+      const existing=matches.find(x=>x.url===url);
+      // Never attach neighbouring recommendation metadata to a title link.
+      if(existing){if(original&&all.length===1)existing.original=original;}
+      else if(label&&all.length===1)add(url,label,original);
     }
   }
   return matches;
@@ -293,7 +308,7 @@ async function providerSearch(params) {
   return results;
   }
   const queries=[query];
-  if(['uaserials','uafilm'].includes(provider)&&original.length>=2&&normalizedTitle(original)!==normalizedTitle(query))queries.push(original);
+  if(['uaserials','uafilm','eneyida'].includes(provider)&&original.length>=2&&normalizedTitle(original)!==normalizedTitle(query))queries.push(original);
   const rows=[];
   for(const term of queries){
     try{rows.push(...await searchOne(term));}

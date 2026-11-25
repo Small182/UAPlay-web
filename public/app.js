@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.44 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.45 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -655,7 +655,7 @@ async function loadProvider(provider){
   const seasonParam=item.type==='tv'?'&season='+encodeURIComponent(state.selectedSeason)+'&seasonYear='+encodeURIComponent(seasonYear):'';
   try{
     let data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.originalTitle||'')}&year=${encodeURIComponent(releaseYear)}${seasonParam}`);
-    if(!['uaserials','uafilm'].includes(provider)&&!data.results?.length && item.originalTitle&&item.originalTitle!==item.title)
+    if(!['uaserials','uafilm','eneyida'].includes(provider)&&!data.results?.length && item.originalTitle&&item.originalTitle!==item.title)
       data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.originalTitle)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.title)}&year=${encodeURIComponent(releaseYear)}${seasonParam}`);
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!box.isConnected)return;
     state.sourceResults=data.results||[];

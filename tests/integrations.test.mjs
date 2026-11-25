@@ -293,3 +293,30 @@ test('exact slug candidate is confirmed by public article title and release year
   });
  }
 });
+
+test('numeric DLE article ID is not interpreted as the release year',async()=>{
+ const html='<a href="/2045-pochatok.html"><span class="th-title">Початок</span></a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const r=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2010&q='+encodeURIComponent('Початок')),{});const data=await r.json();
+  assert.equal(data.results.length,1);assert.equal(data.results[0].year,null);
+ });
+});
+test('Eneyida searches both names and filters partial film matches',async()=>{
+ const terms=[];
+ await withMockFetch(async(_url,options)=>{
+  const q=new URLSearchParams(options.body).get('story');terms.push(q);
+  return new Response(q==='Inception'
+   ?'<article><a href="/films/2045-pochatok.html" class="short_title">Початок</a><div class="short_title_original">Inception</div></article><article><a class="short_title" href="/films/1-other.html">Inception Returns</a></article>'
+   :'<article><a class="short_title" href="/films/2-other.html">Трансформери: Початок</a></article>');
+ },async()=>{
+  const r=await handleIntegration(req('/api/providers/search?provider=eneyida&type=movie&year=2010&q='+encodeURIComponent('Початок')+'&original=Inception'),{});
+  const data=await r.json();assert.deepEqual(terms,['Початок','Inception']);assert.deepEqual(data.results.map(x=>x.title),['Початок']);assert.equal(data.results[0].original,'Inception');
+ });
+});
+test('Eneyida keeps matching series seasons while rejecting similarly named shows',async()=>{
+ const html='<article><a class="short_title" href="/series/1-show.html">Black Mirror 2 сезон (2013)</a></article><article><a class="short_title" href="/series/2-other.html">Black Mirror Returns 2 сезон (2013)</a></article><article><a class="short_title" href="/series/3-other.html">Black Mirror 3 сезон (2016)</a></article>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const r=await handleIntegration(req('/api/providers/search?provider=eneyida&type=tv&year=2011&season=2&seasonYear=2013&q=Black%20Mirror'),{});
+  assert.deepEqual((await r.json()).results.map(x=>x.id),['https://eneyida.tv/series/1-show.html']);
+ });
+});
