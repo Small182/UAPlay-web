@@ -222,7 +222,7 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   .main-shell{max-width:none;width:100%;min-height:100dvh;margin:0}
   main{padding:clamp(12px,1.25vw,24px) clamp(16px,2vw,40px) 18px;min-height:calc(100dvh - 80px)}
   .topbar{padding-left:clamp(16px,2vw,40px);padding-right:clamp(16px,2vw,40px)}
-  .poster-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:clamp(16px,1.5vw,30px);padding:10px 0 30px}
+  .poster-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:clamp(16px,1.5vw,30px);padding:10px 0 30px}
   .channel-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:12px}
   :root[data-view=iptv] .search-box{max-width:none}
   :root[data-view=home] .home-hero{height:clamp(180px,29dvh,300px);min-height:0}
@@ -595,3 +595,12 @@ html[data-tablet=true] .switch-detail-screen .detail-poster img{display:block;wi
 @media (orientation:landscape){
   html[data-tablet=true] .switch-detail-screen .detail-layout{grid-template-columns:minmax(0,1fr) clamp(130px,min(27vw,39dvh),300px)}
 }
+
+/* Keep sparse tablet catalogues and library grids at normal poster sizes.
+   Empty columns remain available instead of stretching the last few cards. */
+html[data-tablet=true] .poster-grid{
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr));
+  gap:14px 16px;padding:8px 4px 24px;align-items:start;
+}
+html[data-tablet=true] .poster-grid .poster-card{width:100%;max-width:180px;min-width:0;justify-self:start}
+html[data-tablet=true] .poster-grid .poster-cover{width:100%;height:auto;aspect-ratio:2/3}
