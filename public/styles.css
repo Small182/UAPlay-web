@@ -306,3 +306,6 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
 .switch-screen-close svg{display:block;width:24px;height:24px}
 .switch-screen-close:hover{filter:brightness(1.15)}
 @media(max-width:760px){.switch-screen-header .switch-screen-close{width:42px;height:42px;flex-basis:42px;border-radius:11px}.switch-screen-header>span{display:none}.switch-screen-header>span+.switch-screen-close{margin-left:auto}}
+
+/* No status strip during normal playback. */
+.player-help:empty{display:none}

@@ -1,6 +1,6 @@
 {
   "name": "uaplay-web",
-  "version": "0.5.39",
+  "version": "0.5.40",
   "private": true,
   "type": "module",
   "description": "UAPlay Progressive Web App for iOS and other browsers, hosted on Cloudflare Workers",

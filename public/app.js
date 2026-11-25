@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.39 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.40 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -758,7 +758,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
       </div></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
     <section id="player-settings" class="player-settings-menu" role="region" aria-label="Налаштування плеєра" hidden><div class="player-settings-heading"><h3>Налаштування</h3><button type="button" class="player-settings-close" data-close-player-settings aria-label="Закрити налаштування">${icon('close')}</button></div><div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div></div></section>
-    <div class="player-help" id="player-help">${presetUrl?'Потік з джерела. Натисніть ▶, якщо Safari не дозволив автоматичний запуск.':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
+    <div class="player-help" id="player-help" role="status">${presetUrl||localBlob?'':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
     </section></div>`;
   const video=$('#video');
   const timeLabel=seconds=>{if(!Number.isFinite(seconds)||seconds<0)return '0:00';const n=Math.floor(seconds);return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;};
@@ -771,6 +771,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
   video.playbackRate=state.playerRate;try{video.volume=state.playerVolume;}catch{}
   video.addEventListener('loadedmetadata',()=>{updateTransport();refreshMediaOptions();});
   video.addEventListener('timeupdate',updateTransport);
+  video.addEventListener('playing',()=>{if($('#video')===video){const help=$('#player-help');if(help)help.textContent='';}});
   video.addEventListener('play',async()=>{updateTransport();setPlayerControls(true,3000);try{const lock=await navigator.wakeLock?.request('screen');if(lock){if($('#video')===video&&!video.paused)state.wakeLock=lock;else lock.release().catch(()=>{});}}catch{}});
   video.addEventListener('pause',()=>{updateTransport();setPlayerControls(true);});
   video.addEventListener('click',()=>{
