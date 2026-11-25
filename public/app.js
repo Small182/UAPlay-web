@@ -1,4 +1,4 @@
-import { builtinWallpapers, isBuiltinWallpaper } from './builtin-wallpapers.js';
+import { isBuiltinWallpaper } from './builtin-wallpapers.js';
 import { homeRailMetrics, wheelCardIndex } from './desktop-layout.js';
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
 import { episodeChoices, providerEpisodeFrames } from './episode-choices.js';
@@ -80,7 +80,7 @@ function applyWallpaper(){
   document.body.style.backgroundImage='none';
 }
 async function openWallpapers(){
-  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal source-modal wallpaper-modal" role="dialog" aria-modal="true" aria-label="Шпалери UAPlay"><button class="close-modal" data-close aria-label="Закрити">${icon('close')}</button><h2>Шпалери</h2><p class="section-note">Галерея Wallhaven · Безпечний пошук. Вбудовані шпалери доступні без зовнішнього API.</p><form id="wallpaper-form" class="player-form"><input id="wallpaper-query" class="input-line" placeholder="Пошук шпалер" maxlength="70"><button class="btn primary" type="submit">Шукати</button></form><div id="wallpaper-results">Завантаження…</div><button class="btn secondary" data-wallpaper-reset>Стандартний фон</button></section></div>`;
+  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal source-modal wallpaper-modal" role="dialog" aria-modal="true" aria-label="Шпалери UAPlay"><button class="close-modal" data-close aria-label="Закрити">${icon('close')}</button><h2>Шпалери</h2><p class="section-note">Пошук Wallhaven</p><form id="wallpaper-form" class="player-form"><input id="wallpaper-query" class="input-line" placeholder="Пошук шпалер" maxlength="70"><button class="btn primary" type="submit">Шукати</button></form><div id="wallpaper-results">Завантаження…</div><button class="btn secondary" data-wallpaper-reset>Стандартний фон</button></section></div>`;
   loadWallpapers('');
 }
 const wallpaperBrowserCache=new Map();
@@ -107,7 +107,7 @@ async function loadWallpapers(query){
   const seq=++wallpaperRequest;
   const root=el.closest('.wallpaper-modal');
   el.innerHTML='<div class="wallpaper-grid"></div><div class="wallpaper-status" aria-live="polite"></div><div class="wallpaper-sentinel" aria-hidden="true"></div>';
-  const g={el,root,seq,query:query.trim(),page:1,seen:new Set(),loading:false,more:true,paused:false,local:false,grid:el.querySelector('.wallpaper-grid'),status:el.querySelector('.wallpaper-status'),sentinel:el.querySelector('.wallpaper-sentinel')};
+  const g={el,root,seq,query:query.trim(),page:1,seen:new Set(),loading:false,more:true,paused:false,grid:el.querySelector('.wallpaper-grid'),status:el.querySelector('.wallpaper-status'),sentinel:el.querySelector('.wallpaper-sentinel')};
   wallpaperGallery=g;
   if(root)root.scrollTop=0;
   if(typeof IntersectionObserver==='function'){
@@ -128,12 +128,7 @@ async function loadNextWallpapers(g){
   const key='uaplay-wallpapers-v1:'+g.query+(page===1?'':':page:'+page);
   let saved=wallpaperBrowserCache.get(key);try{saved=saved||JSON.parse(localStorage.getItem(key)||'null');}catch{}
   if(saved&&Date.now()-saved.time>7*86400000)saved=null;
-  function localFallback(){
-    if(g.seen.size||g.local)return;
-    g.local=true;g.grid.innerHTML='';wallpaperAppend(g,builtinWallpapers(g.query));
-  }
   function accept(rows,hasMore,notice=''){
-    if(g.local){g.grid.innerHTML='';g.seen.clear();g.local=false;}
     const added=wallpaperAppend(g,rows);
     g.page=page+1;g.more=page<30&&hasMore&&added>0;
     wallpaperStatus(g,notice||(!g.more?(g.seen.size?'Усі доступні шпалери завантажено.':'Немає шпалер за цим запитом.'):''));
@@ -145,7 +140,6 @@ async function loadNextWallpapers(g){
     }
     if(Date.now()<wallpaperRetryAt){
       if(saved?.rows?.length)accept(saved.rows,saved.hasMore??saved.rows.length>=24);
-      else localFallback();
       g.paused=true;
       wallpaperStatus(g,'Wallhaven тимчасово обмежив запити. Повторіть пізніше.',true);
       return;
@@ -159,7 +153,6 @@ async function loadNextWallpapers(g){
     if(data.rateLimited||data.stale){
       const usable=rows.length?rows:saved?.rows||[];
       if(usable.length)accept(usable,data.hasMore??saved?.hasMore??usable.length>=24);
-      else localFallback();
       g.paused=true;wallpaperStatus(g,data.notice||'Wallhaven тимчасово недоступний.',true);
       return;
     }
@@ -170,7 +163,6 @@ async function loadNextWallpapers(g){
   }catch(e){
     if(!wallpaperGalleryActive(g))return;
     if(saved?.rows?.length)accept(saved.rows,saved.hasMore??saved.rows.length>=24);
-    else localFallback();
     g.paused=true;wallpaperStatus(g,e.message||'Не вдалося завантажити шпалери.',true);
   }finally{
     g.loading=false;wallpaperWatch(g);
@@ -529,12 +521,12 @@ async function renderSettings() {
   content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div><button type="button" class="page-close" data-close-view aria-label="Закрити налаштування" title="Закрити">${icon('close')}</button></div>
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
-    <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
+    <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
     
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.32 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.33 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
