@@ -520,7 +520,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.54 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.55 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -593,11 +593,11 @@ async function loadSeason(number) {
   }catch(e){if($('#episode-list'))$('#episode-list').innerHTML=`<p class="muted">${safe(e.message)}</p>`;}
 }
 const PROVIDER_FALLBACK=[['uaserials','UASerials'],['eneyida','Eneyida'],['uafilm','UAFilm'],['mikai','Mikai'],['animeon','AnimeON']];
-function switchScreen(title,body,back='close'){
+function switchScreen(title,body,back='close',bodyClass=''){
   const backAction=back==='providers'?'data-back-providers':back==='seasons'?'data-back-seasons':back==='episodes'?'data-back-episodes':'data-close';
   return `<div class="modal-backdrop switch-modal-backdrop" data-close><section class="switch-screen" role="dialog" aria-modal="true" aria-label="${safe(title)}">
     <header class="switch-screen-header"><button type="button" class="switch-back" ${backAction} aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>${safe(title)}</h1><button type="button" class="page-close switch-screen-close" data-close aria-label="Закрити" title="Закрити">${icon('close')}</button></header>
-    <div class="switch-screen-body">${body}</div>
+    <div class="switch-screen-body${bodyClass?' '+bodyClass:''}">${body}</div>
   </section></div>`;
 }
 function showSources(item){
@@ -607,12 +607,12 @@ function showSources(item){
 `,item.type==='tv'?'episodes':'close');
 }
 function browserSourceButton(provider,url='',label='Відкрити сайт у UAPlay'){
-  if(provider==='uafilm'&&state.activeItem?.type==='movie')return '';
+  if(provider==='uafilm')return '';
   const target=providerFrameUrl(provider,url);
   return target?`<button type="button" class="btn secondary" data-provider-frame="${safe(provider)}" data-frame-url="${safe(target)}">${safe(label)}</button>`:'';
 }
 function openProviderFrame(provider,value){
-  if(provider==='uafilm'&&state.activeItem?.type==='movie'){toast('Оберіть вбудований плеєр');return;}
+  if(provider==='uafilm'){toast('Оберіть вбудований плеєр або інше джерело');return;}
   const target=providerFrameUrl(provider,value);
   if(!target){toast('Непідтримувана адреса джерела');return;}
   cleanupPlayer();state.activePlayer=null;const returnProvider=provider;state.activeProvider=returnProvider;
@@ -665,7 +665,7 @@ function openEmbeddedPlayer(provider,value){
   cleanupPlayer();state.activePlayer=null;
   modal.innerHTML=switchScreen(state.activeItem?.title||'Вбудований плеєр',`<div class="provider-embed">
     <iframe class="provider-video-frame" src="${safe(target)}" title="Відеоплеєр джерела" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen; autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
-    </div>`,'providers');
+    </div>`,'providers','embedded-player-body');
 }
 function renderStreamChoices(data){
   const source=state.activeSource;
@@ -708,7 +708,7 @@ async function playProviderMedia(provider,id){
     }
     renderStreamChoices(data);
   }catch(e){
-    if($('#modal-root .switch-screen')&&state.activeSource===activeRequest&&state.selectedSeason===season&&state.selectedEpisode===episode&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url&&!(provider==='uafilm'&&item.type==='movie')?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
+    if($('#modal-root .switch-screen')&&state.activeSource===activeRequest&&state.selectedSeason===season&&state.selectedEpisode===episode&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url&&provider!=='uafilm'?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
   }
 }
 
