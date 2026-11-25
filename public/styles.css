@@ -241,3 +241,9 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   :root[data-view=home] .hero-desc{font-size:14px;-webkit-line-clamp:2}
   :root[data-view=home] .hero-buttons .btn{height:38px;font-size:14px}
 }
+
+/* Close search and settings without a modal overlay. */
+.page-intro .page-close{align-self:flex-start;flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:12px;background:var(--panel2);color:var(--text);padding:0}
+.page-intro .page-close svg{width:24px;height:24px}
+.page-intro .page-close:hover{filter:brightness(1.15)}
+@media(max-width:760px){.page-intro .page-close{width:42px;height:42px;border-radius:11px}}

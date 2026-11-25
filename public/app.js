@@ -278,7 +278,7 @@ async function loadMore() {
 }
 async function renderSearch() {
   ++state.loadId;
-  content.innerHTML=`<div class="page-intro"><div><h1>Пошук</h1><p>Знайдіть фільм або серіал за назвою</p></div></div>${modeBanner()}
+  content.innerHTML=`<div class="page-intro"><div><h1>Пошук</h1><p>Знайдіть фільм або серіал за назвою</p></div><button type="button" class="page-close" data-close-view aria-label="Закрити пошук" title="Закрити">${icon('close')}</button></div>${modeBanner()}
     <label class="search-box">${icon('search')}<input id="search-input" autocomplete="off" type="search" placeholder="Введіть назву фільму або серіалу…" value="${safe(state.searchQuery)}" aria-label="Назва фільму чи серіалу"></label>
     <div id="search-results"></div>`;
   await performSearch();
@@ -439,11 +439,12 @@ function paintChannels() {
     }).join('')}</div>`:'<div class="empty">За вашим запитом каналів не знайдено.</div>'}`;
 }
 async function renderSettings() {
-  ++state.loadId;
+  const id=++state.loadId;
   let configured=state.tmdbConfigured;
   try{configured=(await api('/api/health')).tmdbConfigured;}catch{}
+  if(id!==state.loadId||state.view!=='settings')return;
   state.tmdbConfigured=configured;
-  content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div></div>
+  content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div><button type="button" class="page-close" data-close-view aria-label="Закрити налаштування" title="Закрити">${icon('close')}</button></div>
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
     <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven, як у Switch-версії.</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
@@ -451,11 +452,23 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.29 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.30 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
-async function showView(view) {
+const viewBackStack=[];
+const isUtilityView=view=>view==='search'||view==='settings';
+async function closeUtilityView(){
+  if(!isUtilityView(state.view))return;
+  clearTimeout(state.searchTimer);
+  await showView(viewBackStack.pop()||'home',true);
+}
+async function showView(view,returning=false) {
   if(!NAV.some(([v])=>v===view)&&!HOME_SHELVES.some(([,v])=>v===view))view='home';
+  if(!returning&&view!==state.view){
+    if(isUtilityView(view))viewBackStack.push(state.view);
+    else viewBackStack.length=0;
+  }
+  clearTimeout(state.searchTimer);
   categoryObserver?.disconnect();state.view=view;state.loadId++;buildNav();modal.innerHTML='';window.scrollTo(0,0);
   if(view==='home')await renderHome();
   else if(['movies','series','animation','cartoons','anime'].includes(view)||HOME_SHELVES.some(([,v])=>v===view))await renderCategory(view);
@@ -789,6 +802,7 @@ async function init() {
 document.addEventListener('error', event => { if (event.target instanceof HTMLImageElement) event.target.style.display='none'; }, true);
 document.addEventListener('click',async event=>{
   const action=event.target.closest('button, [data-close]');if(!action)return;
+  if(action.hasAttribute('data-close-view')){await closeUtilityView();return;}
   if(action.matches('[data-close]')){if(event.target===action || action.matches('button'))closeModal();return;}
   if(action.dataset.downloadPause){controlDownload(action.dataset.downloadPause,'pause');return;}
   if(action.dataset.downloadResume){controlDownload(action.dataset.downloadResume,'resume');return;}
@@ -907,6 +921,7 @@ document.addEventListener('submit',event=>{
 });
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape' && modal.innerHTML){event.preventDefault();closeModal();return;}
+  if(event.key==='Escape'&&isUtilityView(state.view)){event.preventDefault();closeUtilityView();return;}
   if(event.altKey||event.ctrlKey||event.metaKey)return;
   const typing=event.target?.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(event.target?.tagName);
   if(typing)return;
