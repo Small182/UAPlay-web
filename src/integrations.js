@@ -74,7 +74,7 @@ function baseCatalogueTitle(s,provider=''){
     .replace(/\b(?:19|20)\d{2}\b/g,' ').replace(/\s+/g,' ').trim();
 }
 function catalogueYear(title,url){
-  const explicit=String(title||'').match(/(?:\(|[·–—]\s*|\s)((?:19|20)\d{2})(?:\)|\s*$)/);
+  const explicit=String(title||'').match(/(?:\(|[·–—]\s*|\s)((?:19|20)\d{2})(?:\)|\s*(?:рік|року|year)\s*$|\s*$)/iu);
   // The numeric prefix of a DLE article slug is an ID, not a release year.
   const filename=String(url||'').split('/').pop().replace(/^\d+-/,'');
   const path=filename.match(/[-_]((?:19|20)\d{2})(?:[-_.][a-z]*)?\.html$/i);
@@ -91,11 +91,13 @@ function exactMovieTitle(value,year=0){
   let s=String(value||'').trim();
   s=s.replace(/\s+(?:дивитися|дивитись|смотреть|watch|онлайн|online)(?:\s.*)?$/iu,'').trim();
   // Only remove a confirmed release-year suffix, never a year inside a title.
-  if(year>=1900)s=s.replace(new RegExp('\\s*(?:\\('+year+'\\)|[·–—]\\s*'+year+'|\\s+'+year+')\\s*$'),'').trim();
-  return normalizedTitle(s);
+  if(year>=1900)s=s.replace(new RegExp('\\s*(?:\\('+year+'\\)|[·–—]\\s*'+year+'|\\s+'+year+')(?:\\s+(?:рік|року|year))?\\s*$','iu'),'').trim();
+  // Normalize numbered parts, not arbitrary digits or Roman words in titles.
+  const roman={i:'1',ii:'2',iii:'3',iv:'4',v:'5',vi:'6',vii:'7',viii:'8',ix:'9',x:'10'};
+  return normalizedTitle(s).replace(/(?:^| )(частина|часть|part|chapter|розділ) (viii|vii|iii|vi|iv|ix|ii|v|x|i|\d+)(?= |$)/gu,(_m,kind,n)=>' '+kind+' '+(roman[n]||String(Number(n)))).trim();
 }
 function exactMovieMatch(item,local,original,year){
-  const wanted=new Set([local,original].map(x=>normalizedTitle(x)).filter(Boolean));
+  const wanted=new Set([local,original].map(x=>exactMovieTitle(x,year)).filter(Boolean));
   return [item.title,item.original].flatMap(x=>[String(x||''),...String(x||'').split(/\s+[/|]\s+/)]).some(x=>wanted.has(exactMovieTitle(x,year)));
 }
 function rankSources(results,local,original='',strict=false,year=0,type='',season=0,seasonYear=0){
@@ -164,8 +166,16 @@ function ukrainianSlug(value){
   const map={а:'a',б:'b',в:'v',г:'h',ґ:'g',д:'d',е:'e',є:'ie',ж:'zh',з:'z',и:'y',і:'i',ї:'i',й:'i',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ь:'',ю:'iu',я:'ia'};
   return normalizedTitle(value).split(' ').map(word=>Array.from(word).map((c,index)=>(index===0&&{є:'ye',ї:'yi',й:'y',ю:'yu',я:'ya'}[c])||(map[c]??c)).join('')).join('-');
 }
+function legacyUkrainianSlug(value){
+  const map={г:'g',и:'i',і:'i',ї:'i',й:'y',ц:'c',я:'ya',ю:'yu',є:'ye',х:'h',щ:'sch',ь:''};
+  const official=ukrainianSlug(value);
+  const alt=normalizedTitle(value).split(' ').map(word=>Array.from(word).map(c=>map[c]??ukrainianSlug(c)).join('')).join('-');
+  // DLE sites mix historic transliteration rules. These are only hints.
+  const mixed=normalizedTitle(value).split(' ').map(word=>Array.from(word).map(c=>({г:'g',и:'y',і:'i',ї:'i',й:'y',ц:'c',я:'ya',ю:'yu',є:'ye',ь:''}[c]??ukrainianSlug(c))).join('')).join('-');
+  return [official,alt,mixed];
+}
 function uaserialSlugCandidates(html,local,original,year){
-  const wanted=new Set([local,original].map(ukrainianSlug).filter(Boolean));
+  const wanted=new Set([local,original].flatMap(legacyUkrainianSlug).filter(Boolean));
   const urls=[];
   for(const match of String(html).matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>/gi)){
     const url=articleLink('uaserials',match[2],'movie');if(!url||urls.includes(url))continue;
@@ -309,12 +319,29 @@ async function providerSearch(params) {
   }
   const queries=[query];
   if(['uaserials','uafilm','eneyida'].includes(provider)&&original.length>=2&&normalizedTitle(original)!==normalizedTitle(query))queries.push(original);
-  const rows=[];
-  for(const term of queries){
-    try{rows.push(...await searchOne(term));}
-    catch(e){if(!rows.length)throw e;break;}
+  const rows=[];let successful=0,lastError;
+  async function collect(term){
+    try{rows.push(...await searchOne(term));successful++;}
+    catch(e){lastError=e;}
   }
-  let ranked=rankSources(rows,query,original,['uafilm','uaserials','eneyida'].includes(provider),year,type,Number(params.get('season'))||0,Number(params.get('seasonYear'))||0);
+  for(const term of queries)await collect(term);
+  if(!successful)throw lastError;
+  const rank=()=>rankSources(rows,query,original,['uafilm','uaserials','eneyida'].includes(provider),year,type,Number(params.get('season'))||0,Number(params.get('seasonYear'))||0);
+  let ranked=rank();
+  // Search with simpler punctuation or a distinctive subtitle when the full
+  // title fails. The acceptance check still uses the full original identity.
+  if(type==='movie'&&['uaserials','eneyida','uafilm'].includes(provider)&&!ranked.length&&!slugCandidates.size){
+    const retry=[];
+    for(const title of queries){
+      const plain=title.replace(/[:.,;!?()[\]–—-]+/g,' ').replace(/\s+/g,' ').trim();
+      if(plain!==title)retry.push(plain);
+      const subtitle=title.split(/[:–—]/).slice(1).join(' ').replace(/[:.,;!?()[\]–—-]+/g,' ').replace(/\s+/g,' ').trim();
+      if(subtitle.length>=8)retry.push(subtitle);
+    }
+    const attempted=new Set(queries.map(x=>x.toLowerCase()));
+    const extra=retry.filter(x=>x.length>=2&&!attempted.has(x.toLowerCase())&&(attempted.add(x.toLowerCase()),true)).slice(0,3);
+    for(const term of extra){await collect(term);ranked=rank();if(ranked.length||slugCandidates.size)break;}
+  }
   if(provider==='uaserials'&&type==='movie'&&!ranked.length){
     for(const url of [...slugCandidates].slice(0,3)){
       try{

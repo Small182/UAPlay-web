@@ -320,3 +320,27 @@ test('Eneyida keeps matching series seasons while rejecting similarly named show
   assert.deepEqual((await r.json()).results.map(x=>x.id),['https://eneyida.tv/series/1-show.html']);
  });
 });
+
+test('long multipart title can be found with punctuation-free search but part two is rejected',async()=>{
+ const title='Голодні ігри: Переспівниця. Частина 1';
+ const original='The Hunger Games: Mockingjay - Part 1';
+ const terms=[];
+ await withMockFetch(async(url)=>{
+  const q=new URL(url).searchParams.get('story');terms.push(q);
+  return new Response(q==='Голодні ігри Переспівниця Частина 1'
+   ?'<a href="/2368-golodni-igry-perespivnycya-chastyna-1.html"><span class="th-title">Голодні ігри: Переспівниця. Частина I 2014 рік</span></a><a href="/2-other.html"><span class="th-title">Голодні ігри: Переспівниця. Частина II</span></a>'
+   :'<a href="/2-other.html"><span class="th-title">Голодні ігри: Переспівниця. Частина 2</span></a>');
+ },async()=>{
+  const r=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2014&q='+encodeURIComponent(title)+'&original='+encodeURIComponent(original)),{});
+  assert.deepEqual((await r.json()).results.map(x=>x.id),['https://uaserials.my/2368-golodni-igry-perespivnycya-chastyna-1.html']);
+  assert.ok(terms.includes('Голодні ігри Переспівниця Частина 1'));
+ });
+});
+test('legacy transliteration is a candidate hint and cannot substitute for page metadata',async()=>{
+ const title='Голодні ігри: Переспівниця. Частина 1';
+ const path='/2368-golodni-igry-perespivnycya-chastyna-1.html';
+ await withMockFetch(async url=>new Response(new URL(url).pathname===path?'<h1>'+title+'</h1><div>Рік: <a>2014</a></div>':'<a href="'+path+'"><img src="/poster.jpg"></a>'),async()=>{
+  const r=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2014&q='+encodeURIComponent(title)),{});
+  assert.deepEqual((await r.json()).results.map(x=>x.id),['https://uaserials.my'+path]);
+ });
+});
