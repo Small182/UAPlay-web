@@ -74,7 +74,7 @@ function baseCatalogueTitle(s,provider=''){
     .replace(/\b(?:19|20)\d{2}\b/g,' ').replace(/\s+/g,' ').trim();
 }
 function catalogueYear(title,url){
-  const explicit=String(title||'').match(/(?:\(|[·–—]\s*|\s)((?:19|20)\d{2})(?:\)|\s*(?:рік|року|year)\s*$|\s*$)/iu);
+  const explicit=String(title||'').match(/(?:\(|[·–—]\s*|\s)((?:19|20)\d{2})(?:\)|\s*(?:рік|року|year)(?:\s+(?:[★⭐]\s*)?\d(?:[.,]\d+)?\s*)?$|\s*$)/iu);
   // The numeric prefix of a DLE article slug is an ID, not a release year.
   const filename=String(url||'').split('/').pop().replace(/^\d+-/,'');
   const path=filename.match(/[-_]((?:19|20)\d{2})(?:[-_.][a-z]*)?\.html$/i);
@@ -90,6 +90,8 @@ function catalogueSeason(title){
 function exactMovieTitle(value,year=0){
   let s=String(value||'').trim();
   s=s.replace(/\s+(?:дивитися|дивитись|смотреть|watch|онлайн|online)(?:\s.*)?$/iu,'').trim();
+  // A visible card can append "2014 рік 6.6" to its title.
+  s=s.replace(/\s+((?:19|20)\d{2})\s+(?:рік|року|year)(?:\s+[★⭐]?\s*\d(?:[.,]\d+)?)?\s*$/iu,(_m,y)=>' '+y);
   // Only remove a confirmed release-year suffix, never a year inside a title.
   if(year>=1900)s=s.replace(new RegExp('\\s*(?:\\('+year+'\\)|[·–—]\\s*'+year+'|\\s+'+year+')(?:\\s+(?:рік|року|year))?\\s*$','iu'),'').trim();
   // Normalize numbered parts, not arbitrary digits or Roman words in titles.
@@ -174,12 +176,12 @@ function legacyUkrainianSlug(value){
   const mixed=normalizedTitle(value).split(' ').map(word=>Array.from(word).map(c=>({г:'g',и:'y',і:'i',ї:'i',й:'y',ц:'c',я:'ya',ю:'yu',є:'ye',ь:''}[c]??ukrainianSlug(c))).join('')).join('-');
   return [official,alt,mixed];
 }
-function uaserialSlugCandidates(html,local,original,year){
+function uaserialSlugCandidates(html,local,original,year,provider='uaserials'){
   const wanted=new Set([local,original].flatMap(legacyUkrainianSlug).filter(Boolean));
   const urls=[];
   for(const match of String(html).matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>/gi)){
-    const url=articleLink('uaserials',match[2],'movie');if(!url||urls.includes(url))continue;
-    let slug=new URL(url).pathname.replace(/^\/\d+-|\.html$/gi,'');
+    const url=articleLink(provider,match[2],'movie');if(!url||urls.includes(url))continue;
+    let slug=new URL(url).pathname.split('/').pop().replace(/^\d+-|\.html$/gi,'');
     const suffix=slug.match(/-((?:19|20)\d{2})$/);
     if(suffix&&year>=1900&&Number(suffix[1])!==year)continue;
     if(suffix&&year>=1900)slug=slug.slice(0,-suffix[0].length);
@@ -192,7 +194,8 @@ function uaserialArticleIdentity(html){
   const source=String(html).replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'');
   const title=htmlPlain(source.match(/<h1\b[^>]*>([\s\S]*?)<\/h1\s*>/i)?.[1]||'');
   const original=htmlPlain(source.match(/class\s*=\s*["'][^"']*\b(?:full-title-oname|full-oname|th-title-oname|original-title)\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1]||'');
-  const year=Number(source.match(/(?:Рік|Рік випуску)\s*:\s*(?:<[^>]+>\s*)*((?:19|20)\d{2})/i)?.[1])||catalogueYear(title,'');
+  const visible=source.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+  const year=Number(visible.match(/(?:Рік випуску|Рік|Year)\s*:\s*((?:19|20)\d{2})/iu)?.[1])||catalogueYear(title,'');
   return {title,original,year};
 }
 function parseHtmlSearch(provider,html,type='') {
@@ -292,13 +295,14 @@ function parseHtmlSearch(provider,html,type='') {
 async function providerSearch(params) {
   const provider=clean(params.get('provider'),24).toLowerCase();
   if(!PROVIDERS[provider])return err('Невідоме джерело');
-  const query=clean(params.get('q'),100);
+  const query=clean(params.get('q'),180);
   if(query.length<2)return err('Пошуковий запит надто короткий');
   const conf=PROVIDERS[provider];
-  const type=params.get('type')||'';const original=clean(params.get('original'),100);
+  const type=params.get('type')||'';const original=clean(params.get('original'),180);
   const year=Number(params.get('year'))||0;
-  const slugCandidates=new Set();
-  async function searchOne(query){
+  const slugCandidates=new Set(),attempts=[];
+  async function searchOne(term){
+  const query=term;
   let endpoint,options;
   if(provider==='mikai')endpoint=`${conf.host}/public/v1/anime?search=${encodeURIComponent(query)}&limit=12`;
   else if(provider==='animeon')endpoint=`${conf.host}/api/anime?search=${encodeURIComponent(query)}&take=12`;
@@ -308,7 +312,7 @@ async function providerSearch(params) {
       body:new URLSearchParams({do:'search',subaction:'search',search_start:'0',full_search:'0',result_from:'1',story:query}).toString()};
   }else endpoint=`${conf.host}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`;
   const {text:body}=await providerRequest(endpoint,options);
-  if(provider==='uaserials'&&type==='movie')for(const url of uaserialSlugCandidates(body,query,original,year))slugCandidates.add(url);
+  if(['uaserials','eneyida'].includes(provider)&&type==='movie')for(const url of uaserialSlugCandidates(body,params.get('q'),original,year,provider))slugCandidates.add(url);
   let results;
   if(conf.type==='json'){
     let payload;try{payload=JSON.parse(body);}catch{throw new Error('Некоректна відповідь API джерела');}
@@ -319,46 +323,59 @@ async function providerSearch(params) {
   }
   const queries=[query];
   if(['uaserials','uafilm','eneyida'].includes(provider)&&original.length>=2&&normalizedTitle(original)!==normalizedTitle(query))queries.push(original);
-  const rows=[];let successful=0,lastError;
+  const rows=[];let successful=0,lastError,blocked=false;
   async function collect(term){
-    try{rows.push(...await searchOne(term));successful++;}
-    catch(e){lastError=e;}
+    if(blocked)return;
+    try{const found=await searchOne(term);rows.push(...found);successful++;attempts.push({term,count:found.length});}
+    catch(e){lastError=e;attempts.push({term,error:e.upstreamStatus||e.status||0});if([401,403,429,451].includes(e.upstreamStatus))blocked=true;}
   }
   for(const term of queries)await collect(term);
   if(!successful)throw lastError;
   const rank=()=>rankSources(rows,query,original,['uafilm','uaserials','eneyida'].includes(provider),year,type,Number(params.get('season'))||0,Number(params.get('seasonYear'))||0);
   let ranked=rank();
-  // Search with simpler punctuation or a distinctive subtitle when the full
-  // title fails. The acceptance check still uses the full original identity.
-  if(type==='movie'&&['uaserials','eneyida','uafilm'].includes(provider)&&!ranked.length&&!slugCandidates.size){
-    const retry=[];
-    for(const title of queries){
-      const plain=title.replace(/[:.,;!?()[\]–—-]+/g,' ').replace(/\s+/g,' ').trim();
-      if(plain!==title)retry.push(plain);
-      const subtitle=title.split(/[:–—]/).slice(1).join(' ').replace(/[:.,;!?()[\]–—-]+/g,' ').replace(/\s+/g,' ').trim();
-      if(subtitle.length>=8)retry.push(subtitle);
-    }
-    const attempted=new Set(queries.map(x=>x.toLowerCase()));
-    const extra=retry.filter(x=>x.length>=2&&!attempted.has(x.toLowerCase())&&(attempted.add(x.toLowerCase()),true)).slice(0,3);
-    for(const term of extra){await collect(term);ranked=rank();if(ranked.length||slugCandidates.size)break;}
-  }
-  if(provider==='uaserials'&&type==='movie'&&!ranked.length){
-    for(const url of [...slugCandidates].slice(0,3)){
+  const verified=new Set();
+  async function verifyCandidates(){
+    if(!['uaserials','eneyida'].includes(provider)||type!=='movie'||ranked.length||blocked)return;
+    for(const url of slugCandidates){
+      if(verified.has(url)||verified.size>=3||blocked)continue;
+      verified.add(url);
       try{
         const response=await providerRequest(url);
-        // A redirect to another article is not evidence for the candidate.
         if(response.url&&response.url!==url)continue;
         const identity=uaserialArticleIdentity(response.text);
         if(year>=1900&&identity.year!==year)continue;
         const item={id:url,url,provider,name:conf.name,title:identity.title,original:identity.original};
         if(!item.title||!exactMovieMatch(item,query,original,year))continue;
         ranked.push({...item,year:identity.year||null,season:null});
-      }catch{}
+      }catch(e){if([401,403,429,451].includes(e.upstreamStatus))blocked=true;}
+    }
+  }
+  await verifyCandidates();
+  // Short terms are only discovery queries, never the acceptance criteria.
+  // Try distinctive subtitle words before another long phrase.
+  if(type==='movie'&&['uaserials','eneyida','uafilm'].includes(provider)&&!ranked.length&&!blocked){
+    const plain=[],keywords=[],subtitles=[];
+    const common=new Set(['частина','часть','chapter','part','movie','фільм','film','сезон','season']);
+    for(const title of queries){
+      const simple=title.replace(/[:.,;!?()[\]–—-]+/g,' ').replace(/\s+/g,' ').trim();
+      if(simple!==title)plain.push(simple);
+      const sub=title.split(/[:–—]/).slice(1).join(' ').replace(/[:.,;!?()[\]–—-]+/g,' ').replace(/\s+/g,' ').trim();
+      if(sub.length>=8)subtitles.push(sub);
+      const tokens=normalizedTitle(sub||title).split(' ').filter(w=>w.length>=5&&/\p{L}/u.test(w)&&!common.has(w)).sort((a,b)=>b.length-a.length);
+      if(tokens.length)keywords.push(tokens[0]);
+    }
+    const attempted=new Set(queries.map(x=>x.toLowerCase()));
+    const extra=[...plain.slice(0,1),...keywords,...subtitles,...plain.slice(1)].filter(x=>x.length>=2&&!attempted.has(x.toLowerCase())&&(attempted.add(x.toLowerCase()),true)).slice(0,4);
+    for(const term of extra){
+      await collect(term);
+      ranked=rank();
+      await verifyCandidates();
+      if(ranked.length||blocked)break;
     }
   }
   // Deduplicate after validation so a weaker duplicate cannot conceal an exact match.
   const results=[...new Map(ranked.slice().reverse().map(row=>[row.id,row])).values()].reverse().slice(0,18);
-  return js({provider,results,notice:'Наявність результату не гарантує відтворення у Safari.'},200,0);
+  return js({provider,results,...(!results.length?{searchDiagnostic:{attempts,parsed:rows.length,verified:verified.size,blocked}}:{}),notice:'Наявність результату не гарантує відтворення у Safari.'},200,0);
 }
 async function providerMedia(params) {
   const provider=clean(params.get('provider'),24).toLowerCase();

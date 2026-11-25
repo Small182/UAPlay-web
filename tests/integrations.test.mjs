@@ -344,3 +344,24 @@ test('legacy transliteration is a candidate hint and cannot substitute for page 
   assert.deepEqual((await r.json()).results.map(x=>x.id),['https://uaserials.my'+path]);
  });
 });
+
+test('distinctive subtitle token discovers full title in both HTML catalogues without accepting another part',async()=>{
+ for(const provider of ['uaserials','eneyida']){
+  const terms=[];
+  await withMockFetch(async(url,options)=>{
+   const term=new URL(url).searchParams.get('story')||new URLSearchParams(options.body).get('story');terms.push(term);
+   const card=(id,title)=>provider==='eneyida'?'<article><a class="short_title" href="/films/'+id+'.html">'+title+'</a></article>':'<a href="/'+id+'.html"><span class="th-title">'+title+'</span></a>';
+   return new Response(term.toLowerCase()==='переспівниця'?card('2368-movie','Голодні ігри: Переспівниця. Частина 1 2014 рік 6.6')+card('2369-movie','Голодні ігри: Переспівниця. Частина 2 2015 рік 6.5'):card('3-other','Unrelated'));
+  },async()=>{
+   const r=await handleIntegration(req('/api/providers/search?provider='+provider+'&type=movie&year=2014&q='+encodeURIComponent('Голодні ігри: Переспівниця. Частина 1')+'&original='+encodeURIComponent('The Hunger Games: Mockingjay - Part 1')),{});const data=await r.json();
+   assert.equal(data.results.length,1);assert.match(data.results[0].id,/2368-movie/);assert.ok(terms.includes('переспівниця'));
+  });
+ }
+});
+test('empty movie search includes safe attempt diagnostics and stops on rate limit',async()=>{
+ let calls=0;
+ await withMockFetch(async()=>{calls++;return calls===1?new Response('<a href="/1-other.html">Other</a>'):new Response('',{status:429});},async()=>{
+  const r=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&q=Example%20title&original=Different%20title'),{});const data=await r.json();
+  assert.equal(data.searchDiagnostic.blocked,true);assert.equal(calls,2);assert.deepEqual(data.results,[]);
+ });
+});

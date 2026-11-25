@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.47 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.48 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -661,7 +661,7 @@ async function loadProvider(provider){
     state.sourceResults=data.results||[];
     if(state.sourceResults.length===1){await playProviderMedia(provider,state.sourceResults[0].id);return;}
     box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season&&!source.title.includes(String(source.season)+' сезон')?` · Сезон ${source.season}`:""}</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>`).join(''):
-      '<p class="switch-subtitle">Нічого не знайдено. Джерело може бути недоступне або змінити структуру сайту.</p>';
+      '<p class="switch-subtitle">'+(data.searchDiagnostic?.blocked?'Джерело обмежило запити. Спробуйте пізніше.':'Нічого не знайдено.')+'</p>'+ (data.searchDiagnostic?'<details class="section-note"><summary>Діагностика пошуку</summary><p>'+safe(data.searchDiagnostic.attempts.map(a=>a.term+': '+(a.error?'HTTP '+a.error:a.count+' карток')).join(' · '))+'</p></details>':'');
   }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
 }
 function openEmbeddedPlayer(provider,value){
