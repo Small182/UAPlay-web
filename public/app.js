@@ -1,3 +1,4 @@
+import { libraryItems } from './library.js';
 import { isBuiltinWallpaper } from './builtin-wallpapers.js';
 import { homeRailMetrics, wheelCardIndex, isPhoneDevice, isTabletDevice, useMobileShelves } from './desktop-layout.js';
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
@@ -522,7 +523,7 @@ async function renderFavorites(){
   const tab=state.libraryTab==='history'?'history':'saved';
   state.libraryTab=tab;
   const nav='<div class="library-tabs">'+tabs.map(([v,t])=>'<button type="button" class="btn '+(v===tab?'primary':'secondary')+'" data-library-tab="'+v+'" aria-pressed="'+(v===tab)+'">'+t+'</button>').join('')+'</div>';
-  const items=tab==='history'?Object.values(state.history).sort((a,b)=>b.watchedAt-a.watchedAt):Object.values(state.favorites).filter(i=>!state.history[keyFor(i)]);
+  const items=libraryItems(tab,state.favorites,state.history);
   loadVisibleItems(items);
   const historyActions=tab==='history'?'<div class="library-tabs library-history-actions"><button type="button" class="btn secondary" data-clear-history>Очистити історію</button></div>':'';
   content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+(items.length?posterGrid(items):'<div class="empty"><h2>Тут поки порожньо</h2></div>')+historyActions;
@@ -567,7 +568,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.66 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.67 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -599,9 +600,12 @@ function toggleFavorite(key) {
   if(state.favorites[key]){delete state.favorites[key];toast('Видалено з вибраного');}
   else{state.favorites[key]=item;toast('Додано до вибраного');}
   save();
+  const detail=modal.querySelector('.switch-detail-screen');
+  const btn=detail?.querySelector('[data-favorite]');
+  if(btn&&btn.dataset.favorite===key)btn.innerHTML=`${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}`;
+  const hero=$('#hero-favorite');
+  if(hero?.dataset.favorite===key)hero.textContent=state.favorites[key]?'✓  У вибраному':'+  У вибране';
   if(state.view==='favorites')renderFavorites();
-  else if(modal.querySelector('.detail-modal')){const btn=modal.querySelector('[data-favorite]');if(btn){btn.innerHTML=`${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}`;}}
-  else if(state.view==='home')renderHome();
 }
 async function openDetails(key) {
   const basic=state.lists[key] || state.favorites[key];
