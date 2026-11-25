@@ -663,3 +663,93 @@ html[data-tablet=true] #modal-root>.detail-backdrop{background:var(--bg)}
 .episode-watch-state.started{color:var(--text)}
 .episode-watch-state svg{width:15px;height:15px;stroke-width:2.5;flex-shrink:0}
 :root[data-theme=light] .episode-watch-state.watched{color:#087a60}
+
+/* Phone player: a bounded flex layout, with a single safe-area owner.
+   No 16:9 minimum height can push the transport below the viewport. */
+html[data-device=phone] #modal-root>.player-backdrop{
+  background:#000;
+  --player-safe-side:max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px));
+}
+@media(orientation:landscape){
+  html[data-device=phone] #modal-root>.player-backdrop{
+    padding:env(safe-area-inset-top,0px) var(--player-safe-side) env(safe-area-inset-bottom,0px);
+    align-items:stretch;justify-content:stretch
+  }
+  html[data-device=phone] .player-backdrop .player-modal{
+    width:100%;height:100%;max-height:100%;min-height:0;min-width:0;
+    display:flex;flex-direction:column;justify-content:flex-start;overflow:hidden;
+    padding:0;border-radius:0;background:#000
+  }
+  html[data-device=phone] .player-backdrop .player-top{
+    position:relative;flex:0 0 40px;height:40px;min-height:0;
+    padding:4px 12px;gap:8px
+  }
+  html[data-device=phone] .player-backdrop .player-top h2{
+    font-size:15px;line-height:1.2;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0
+  }
+  html[data-device=phone] .player-backdrop .player-top .close-modal{
+    position:static;flex:0 0 32px;width:32px;height:32px;border-radius:9px
+  }
+  html[data-device=phone] .player-backdrop .player-top .close-modal svg{width:20px;height:20px}
+  html[data-device=phone] .player-backdrop .player-frame{
+    flex:1 1 0;min-height:0;min-width:0;width:100%;height:auto;aspect-ratio:auto;overflow:hidden
+  }
+  html[data-device=phone] .player-backdrop .player-frame video{
+    display:block;width:100%;height:100%;max-height:none;object-fit:contain
+  }
+  html[data-device=phone] .player-backdrop .switch-player-panel{
+    min-height:0;padding:20px 10px 7px
+  }
+  html[data-device=phone] .player-backdrop .switch-player-bottom{
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;margin-top:4px
+  }
+  html[data-device=phone] .player-backdrop .switch-player-bottom .switch-player-actions{
+    grid-column:2;grid-row:1;gap:clamp(6px,1.5vw,15px);margin:0
+  }
+  html[data-device=phone] .player-backdrop .switch-transport{width:36px;height:36px;flex-shrink:0}
+  html[data-device=phone] .player-backdrop .switch-transport.switch-play{width:46px;height:46px}
+  html[data-device=phone] .player-backdrop .switch-transport svg{width:21px;height:21px}
+  html[data-device=phone] .player-backdrop .switch-transport.switch-play svg{width:28px;height:28px}
+  html[data-device=phone] .player-backdrop .switch-volume{
+    grid-column:1;grid-row:1;width:min(100%,120px);gap:5px
+  }
+  html[data-device=phone] .player-backdrop .switch-volume svg{width:18px;height:18px}
+  html[data-device=phone] .player-backdrop .switch-player-tools{grid-column:3;grid-row:1;gap:6px}
+  html[data-device=phone] .player-backdrop .switch-player-tool{width:32px;height:32px;border-radius:8px}
+  html[data-device=phone] .player-backdrop .switch-player-tool svg{width:19px;height:19px}
+  html[data-device=phone] .player-backdrop .switch-player-seek{font-size:11px;gap:6px}
+  html[data-device=phone] .player-backdrop .player-help:not(:empty){
+    flex:0 0 auto;font-size:11px;padding:3px 8px;max-height:3em;overflow:auto
+  }
+  html[data-device=phone] .player-backdrop #stream-form{flex:0 0 auto;min-height:0;padding:4px 8px}
+  html[data-device=phone] .player-backdrop .player-settings-menu{
+    top:44px;right:8px;width:min(390px,calc(100% - 16px));max-height:calc(100% - 52px)
+  }
+}
+@media(orientation:landscape) and (max-width:650px){
+  html[data-device=phone] .player-backdrop .switch-player-bottom{gap:5px}
+  html[data-device=phone] .player-backdrop .switch-volume input{min-width:0}
+  html[data-device=phone] .player-backdrop .switch-transport{width:32px;height:32px}
+  html[data-device=phone] .player-backdrop .switch-transport.switch-play{width:40px;height:40px}
+  html[data-device=phone] .player-backdrop .switch-player-bottom .switch-player-actions{gap:5px}
+}
+/* In-app fullscreen keeps the video outside the camera cutout. Both side
+   insets are symmetric, so the picture stays optically centered. */
+html[data-device=phone] #modal-root>.player-backdrop.is-player-fullscreen{
+  padding:env(safe-area-inset-top,0px) var(--player-safe-side) env(safe-area-inset-bottom,0px);
+  align-items:stretch;justify-content:stretch;background:#000
+}
+html[data-device=phone] .player-backdrop.is-player-fullscreen .player-modal{
+  width:100%;height:100%;max-height:100%;min-height:0;min-width:0;
+  display:flex;flex-direction:column;justify-content:flex-start;overflow:hidden;padding:0;background:#000
+}
+html[data-device=phone] .player-backdrop.is-player-fullscreen .player-top{display:none}
+html[data-device=phone] .player-backdrop.is-player-fullscreen .player-frame{
+  flex:1 1 0;min-height:0;min-width:0;width:100%;height:auto;aspect-ratio:auto;overflow:hidden
+}
+html[data-device=phone] .player-backdrop.is-player-fullscreen .player-frame video{
+  display:block;width:100%;height:100%;max-height:none;object-fit:contain
+}
+html[data-device=phone] .player-backdrop.is-player-fullscreen .player-settings-menu{
+  top:8px;right:8px;max-height:calc(100% - 16px)
+}

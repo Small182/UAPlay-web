@@ -568,7 +568,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.67 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.68 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -783,6 +783,35 @@ function setPlayerControls(visible, hideAfter=0) {
     if($('#video') && !$('#video').paused&&!playerSettingsOpen())frame.classList.add('controls-hidden');
   },hideAfter);
 }
+// Use the in-app viewport on phones: native iOS video fullscreen cannot
+// respect our safe-area layout or retain UAPlay's playback controls.
+function phonePlayerFullscreen(){
+  return !!modal.querySelector('.player-backdrop.is-player-fullscreen');
+}
+function togglePlayerFullscreen(){
+  const video=$('#video');
+  if(!video)return;
+  if(isPhone){
+    const backdrop=video.closest('.player-backdrop');
+    if(!backdrop)return;
+    const active=backdrop.classList.toggle('is-player-fullscreen');
+    const button=backdrop.querySelector('[data-fullscreen]');
+    if(button){
+      const label=active?'Вийти з повноекранного режиму':'Повний екран';
+      button.setAttribute('aria-label',label);
+      button.title=label;
+      button.setAttribute('aria-pressed',String(active));
+      button.innerHTML=active?'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 8h5V3m13 5h-5V3M3 16h5v5m13-5h-5v5"/></svg>':'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>';
+    }
+    const player=video.closest('.player-modal');
+    if(player)player.scrollTop=0;
+    setPlayerControls(true,3000);
+    return;
+  }
+  if(document.fullscreenElement){document.exitFullscreen?.().catch(()=>{});return;}
+  if(typeof video.webkitEnterFullscreen==='function')video.webkitEnterFullscreen();
+  else video.requestFullscreen?.().catch(()=>{});
+}
 function playerSettingsOpen(){const panel=$('#player-settings');return !!panel&&!panel.hidden;}
 function togglePlayerSettings(open){
   const panel=$('#player-settings'),button=$('[data-player-settings]');
@@ -814,14 +843,14 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null, channelLis
   const key=keyFor(item);
   state.activePlayer={key,item,season:state.selectedSeason,episode:state.selectedEpisode,voiceGroup,playAttempt:null,provider:item.type==='tv'?state.activeProvider:'',sourceId:item.type==='tv'?state.activeSource?.id:null,channelList};
   const storedUrl= presetUrl || state.sources[key] || '';
-  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="player-modal" role="dialog" aria-modal="true" aria-label="Плеєр">
+  modal.innerHTML=`<div class="modal-backdrop player-backdrop" data-close><section class="player-modal" role="dialog" aria-modal="true" aria-label="Плеєр">
     <div class="player-top"><h2>${safe(item.title)}</h2><button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button></div>
     <div class="player-frame"><video id="video" playsinline webkit-playsinline preload="metadata" tabindex="0" aria-label="Відео: дотик або клік — показати чи сховати керування" poster="${safe(imageUrl(item.backdrop,'w1280'))}"></video>
       <div class="switch-player-panel${item.type==='iptv'?' iptv-transport':''}" id="switch-player-panel"><div class="switch-player-seek"><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
       <div class="switch-player-bottom">
         <label class="switch-volume" title="Гучність"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M16 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/></svg><input type="range" id="player-volume" min="0" max="1" step="0.01" value="${state.playerVolume}" aria-label="Гучність" style="--volume-fill:${state.playerVolume*100}%"></label>
         <div class="switch-player-actions${item.type==='tv'?' series-transport':''}">${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="-1" aria-label="Попередня серія" title="Попередня серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 6-6 6 6 6m8-12-6 6 6 6"/></svg></button>':''}<button type="button" class="switch-transport" data-seek="-10" aria-label="${item.type==='iptv'?'Попередній канал':'Назад 10 секунд'}" title="${item.type==='iptv'?'Попередній канал':'Назад 10 секунд'}"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15.5 5-7 7 7 7"/></svg></button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Відтворити">${transportPlayIcon(true)}</button><button type="button" class="switch-transport" data-seek="10" aria-label="${item.type==='iptv'?'Наступний канал':'Вперед 10 секунд'}" title="${item.type==='iptv'?'Наступний канал':'Вперед 10 секунд'}"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8.5 5 7 7-7 7"/></svg></button>${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="1" aria-label="Наступна серія" title="Наступна серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 6 6 6-6 6m8-12 6 6-6 6"/></svg></button>':''}</div>
-        <div class="switch-player-tools"><button type="button" class="switch-player-tool" data-player-settings aria-controls="player-settings" aria-expanded="false" aria-label="Налаштування плеєра" title="Налаштування">${icon('settings')}</button><button type="button" class="switch-fullscreen switch-player-tool" data-fullscreen aria-label="Повний екран" title="Повний екран"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
+        <div class="switch-player-tools"><button type="button" class="switch-player-tool" data-player-settings aria-controls="player-settings" aria-expanded="false" aria-label="Налаштування плеєра" title="Налаштування">${icon('settings')}</button><button type="button" class="switch-fullscreen switch-player-tool" data-fullscreen aria-pressed="false" aria-label="Повний екран" title="Повний екран"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
       </div></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
     <section id="player-settings" class="player-settings-menu" role="region" aria-label="Налаштування плеєра" hidden><div class="player-settings-heading"><h3>Налаштування</h3><button type="button" class="player-settings-close" data-close-player-settings aria-label="Закрити налаштування">${icon('close')}</button></div><div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div></div></section>
@@ -1030,7 +1059,7 @@ document.addEventListener('click',async event=>{
   if(action.hasAttribute('data-close-player-settings')){togglePlayerSettings(false);return;}
   if(action.hasAttribute('data-toggle-play')){setPlayerControls(true,3000);const v=$('#video');if(v){if(v.paused)v.play().catch(()=>toast('Не вдалося запустити відео'));else v.pause();}return;}
   if(action.dataset.seek){if(state.activePlayer?.item.type==='iptv'){stepChannel(Math.sign(Number(action.dataset.seek)));return;}setPlayerControls(true,3000);const v=$('#video');if(v&&Number.isFinite(v.duration))v.currentTime=Math.min(v.duration,Math.max(0,v.currentTime+Number(action.dataset.seek)));return;}
-  if(action.hasAttribute('data-fullscreen')){const v=$('#video');if(v){if(typeof v.webkitEnterFullscreen==='function')v.webkitEnterFullscreen();else if(v.requestFullscreen)v.requestFullscreen().catch(()=>{});}return;}
+  if(action.hasAttribute('data-fullscreen')){togglePlayerFullscreen();return;}
   if(action.dataset.player){const key=action.dataset.player;const item=state.lists[key]||state.activeItem;if(item)openPlayer(item);return;}
   if(action.dataset.channelFavorite!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channelFavorite)];if(c){if(state.iptvFavorites[c.url])delete state.iptvFavorites[c.url];else state.iptvFavorites[c.url]=c;save();if(state.iptvOnlyFavorites)paintChannels();else{const saved=!!state.iptvFavorites[c.url];const label=saved?'Прибрати з вибраного':'Додати у вибране';action.setAttribute('aria-pressed',String(saved));action.setAttribute('aria-label',label+': '+c.name);action.title=label;action.querySelector('svg')?.setAttribute('fill',saved?'currentColor':'none');}}return;}
   if(action.hasAttribute('data-iptv-favorites')){state.iptvOnlyFavorites=!state.iptvOnlyFavorites;state.iptvGroup='';action.textContent=state.iptvOnlyFavorites?'Усі канали':'☆ Вибране';action.setAttribute('aria-pressed',String(state.iptvOnlyFavorites));paintChannels();return;}
@@ -1171,6 +1200,7 @@ document.addEventListener('submit',event=>{
 });
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&playerSettingsOpen()){event.preventDefault();togglePlayerSettings(false);return;}
+  if(event.key==='Escape'&&phonePlayerFullscreen()){event.preventDefault();togglePlayerFullscreen();return;}
   if(event.key==='Escape' && modal.innerHTML){event.preventDefault();closeModal();return;}
   if(event.key==='Escape'&&isUtilityView(state.view)){event.preventDefault();closeUtilityView();return;}
   if(event.altKey||event.ctrlKey||event.metaKey)return;
@@ -1191,8 +1221,7 @@ document.addEventListener('keydown',event=>{
       setPlayerControls(true,3000);
     }else if(key==='f'){
       event.preventDefault();
-      if(typeof video.webkitEnterFullscreen==='function')video.webkitEnterFullscreen();
-      else video.requestFullscreen?.().catch(()=>{});
+      togglePlayerFullscreen();
     }else if(key==='m'){
       event.preventDefault();video.muted=!video.muted;setPlayerControls(true,3000);
     }else if(event.key==='Enter'&&event.target===video){
