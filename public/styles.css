@@ -369,3 +369,7 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   html[data-device=phone][data-view=home] .shelf-toolbar{flex-wrap:wrap;justify-content:flex-start}
   html[data-device=phone][data-view=home] .hero-buttons .btn{font-size:11px;padding:0 3px}
 }
+
+/* History action: use the same responsive dimensions as either library tab. */
+.library-tabs.library-history-actions{justify-content:center;margin:12px auto 18px}
+.library-tabs.library-history-actions .btn{flex:0 0 calc((100% - 9px)/2)}
