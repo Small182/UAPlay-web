@@ -11,3 +11,8 @@ test('saved titles remain visible even if started or completed',()=>{
  assert.deepEqual(libraryItems('history',favorites,history),[history['tv:1'],history['movie:2']]);
  assert.deepEqual(libraryItems('saved',favorites,{}),[b,c]);
 });
+
+test('empty watchlist and history remain independent',()=>{
+ assert.deepEqual(libraryItems('saved',{}, {'tv:1':{id:1,type:'tv',watchedAt:1}}),[]);
+ assert.deepEqual(libraryItems('history',{'tv:1':{id:1,type:'tv'}},{}),[]);
+});
