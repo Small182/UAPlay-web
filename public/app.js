@@ -556,7 +556,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.61 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.62 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -1013,6 +1013,50 @@ function observeHomeRail(){
 }
 window.addEventListener('resize',fitHomeRail,{passive:true});
 phoneOrientation.addEventListener?.('change',fitHomeRail);
+// On iOS standalone, orientationchange can precede the final visual viewport
+// resize. Keep one viewport-sized overlay and update its geometry without
+// replacing the active dialog, selected title, or video.
+if(isPhone||isTablet){
+  const root=document.documentElement;
+  const viewport=window.visualViewport;
+  let viewportFrame=0,settleTimers=[];
+  function syncTouchViewport(){
+    viewportFrame=0;
+    const unzoomed=!viewport||Math.abs(viewport.scale-1)<0.01;
+    if(!unzoomed){
+      root.style.removeProperty('--touch-viewport-width');
+      root.style.removeProperty('--touch-viewport-height');
+      root.style.removeProperty('--touch-viewport-top');
+      root.style.removeProperty('--touch-viewport-left');
+      return;
+    }
+    const width=viewport?.width||window.innerWidth;
+    const height=viewport?.height||window.innerHeight;
+    if(width<=0||height<=0)return;
+    root.style.setProperty('--touch-viewport-width',Math.round(width)+'px');
+    root.style.setProperty('--touch-viewport-height',Math.round(height)+'px');
+    root.style.setProperty('--touch-viewport-top',Math.round(viewport?.offsetTop||0)+'px');
+    root.style.setProperty('--touch-viewport-left',Math.round(viewport?.offsetLeft||0)+'px');
+    fitHomeRail();
+  }
+  function scheduleTouchViewport(){
+    if(!viewportFrame)viewportFrame=requestAnimationFrame(syncTouchViewport);
+  }
+  function settleTouchViewport(){
+    settleTimers.forEach(clearTimeout);
+    scheduleTouchViewport();
+    // WebKit can report intermediate dimensions during the native rotation.
+    settleTimers=[80,250,550].map(ms=>setTimeout(scheduleTouchViewport,ms));
+  }
+  window.addEventListener('resize',scheduleTouchViewport,{passive:true});
+  window.addEventListener('orientationchange',settleTouchViewport,{passive:true});
+  phoneOrientation.addEventListener?.('change',settleTouchViewport);
+  viewport?.addEventListener('resize',scheduleTouchViewport,{passive:true});
+  viewport?.addEventListener('scroll',scheduleTouchViewport,{passive:true});
+  window.addEventListener('pageshow',settleTouchViewport);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)settleTouchViewport();});
+  scheduleTouchViewport();
+}
 document.addEventListener('wheel',event=>{
   if(state.view!=='home'||modal.innerHTML||mobileShelves()||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
   const rail=$('#home-rail');
