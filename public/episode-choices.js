@@ -33,3 +33,17 @@ export function providerEpisodeFrames(provider,data,matching){
   .filter(p=>!p.season&&!p.episode)
   .map(p=>({...p,label:'Вбудований плеєр · оберіть серію в плеєрі'}));
 }
+
+/* Only previously confirmed episode streams are eligible for automatic play. */
+export function automaticEpisodeChoice(choices,voices,preference){
+  if(voices.length){
+    const preferred=voices.findIndex(v=>v.key===preference);
+    const voiceIndex=preferred>=0?preferred:0;
+    return {url:voices[voiceIndex].url,voiceIndex};
+  }
+  return choices.length?{url:choices[0].url,voiceIndex:-1}:null;
+}
+export function nextChannelIndex(index,delta,count){
+  if(!Number.isInteger(index)||index<0||index>=count||!Number.isInteger(count)||count<1||!delta)return null;
+  return (index+Math.sign(delta)+count)%count;
+}
