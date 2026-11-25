@@ -29,6 +29,6 @@ export function isTabletDevice(info={}){
     (/Macintosh/i.test(userAgent)||/^Mac/i.test(platform))&&maxTouchPoints>1||
     /Android/i.test(userAgent);
 }
-export function useMobileShelves(phone,tablet,landscape){
-  return phone||tablet&&!landscape;
+export function useMobileShelves(phone,tablet){
+  return phone||tablet;
 }

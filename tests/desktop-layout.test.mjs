@@ -31,7 +31,7 @@ test('landscape split layout is reserved for phones, not tablets or desktops',()
  assert.equal(isPhoneDevice({userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X) Safari',platform:'MacIntel',maxTouchPoints:0}),false);
 });
 
-test('portrait tablets use mobile shelves, landscape tablets and desktops keep desktop shelves',()=>{
+test('tablets and phones use mobile shelves in both orientations, desktops keep desktop shelves',()=>{
  const ipad={userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Safari',platform:'MacIntel',maxTouchPoints:5};
  const android={userAgent:'Mozilla/5.0 (Linux; Android 15) Safari',userAgentData:{mobile:false}};
  const iphone={userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile Safari',platform:'iPhone',maxTouchPoints:5};
@@ -39,7 +39,7 @@ test('portrait tablets use mobile shelves, landscape tablets and desktops keep d
  for(const device of [ipad,android,{userAgent:'Mozilla/5.0 (iPad; CPU OS 18_0) Safari'}]){
   assert.equal(isTabletDevice(device),true);
   assert.equal(useMobileShelves(isPhoneDevice(device),isTabletDevice(device),false),true);
-  assert.equal(useMobileShelves(isPhoneDevice(device),isTabletDevice(device),true),false);
+  assert.equal(useMobileShelves(isPhoneDevice(device),isTabletDevice(device),true),true);
  }
  assert.equal(isTabletDevice(iphone),false);
  assert.equal(isTabletDevice(pc),false);

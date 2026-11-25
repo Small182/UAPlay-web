@@ -993,7 +993,7 @@ document.addEventListener('click',async event=>{
 });
 // Desktop home: fit whole posters to the visible rail, and map wheel to card scrolling.
 const phoneOrientation=matchMedia('(orientation: landscape)');
-const mobileShelves=()=>useMobileShelves(isPhone,isTablet,phoneOrientation.matches);
+const mobileShelves=()=>useMobileShelves(isPhone,isTablet);
 let observedHomeRail=null,homeRailObserver=null,wheelRail=null,wheelTarget=0,wheelTime=0,wheelDelta=0;
 function fitHomeRail(){
   const rail=observedHomeRail;
@@ -1012,10 +1012,7 @@ function observeHomeRail(){
   if(typeof ResizeObserver==='function'){homeRailObserver=new ResizeObserver(fitHomeRail);homeRailObserver.observe(observedHomeRail);}
 }
 window.addEventListener('resize',fitHomeRail,{passive:true});
-phoneOrientation.addEventListener?.('change',()=>{
-  if(isTablet&&state.view==='home'&&Object.keys(state.home).length){renderHome();return;}
-  fitHomeRail();
-});
+phoneOrientation.addEventListener?.('change',fitHomeRail);
 document.addEventListener('wheel',event=>{
   if(state.view!=='home'||modal.innerHTML||mobileShelves()||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
   const rail=$('#home-rail');

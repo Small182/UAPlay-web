@@ -477,9 +477,8 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   }
 }
 
-/* Portrait tablets share the phone shelf navigation, with denser posters.
-   Keep the desktop layout unchanged in landscape. */
-@media (orientation:portrait){
+/* Tablets share phone shelf navigation in both orientations. */
+@media (orientation:portrait), (orientation:landscape){
   html[data-tablet=true][data-view=home] .home-hero{height:auto;min-height:0;max-height:none;align-items:flex-start;gap:14px}
   html[data-tablet=true][data-view=home] .hero-content{align-self:stretch;min-width:0;justify-content:flex-start}
   html[data-tablet=true][data-view=home] .hero-title{display:block;flex:0 0 auto;white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip;-webkit-line-clamp:unset;font-size:clamp(20px,3vw,30px)}
@@ -494,4 +493,32 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   html[data-tablet=true][data-view=home] .home-shelf-rail{gap:14px;padding:6px 5px 10px;scroll-padding-inline:5px}
   html[data-tablet=true][data-view=home] .home-shelf-rail .poster-card{flex:0 0 clamp(92px,19vw,170px);width:clamp(92px,19vw,170px)}
   html[data-tablet=true][data-view=home] .home-shelf-rail .poster-title{font-size:clamp(13px,1.8vw,17px)}
+}
+
+/* Landscape tablet: retain the information card above the compact scrollable shelves. */
+@media (orientation:landscape){
+  html[data-tablet=true][data-view=home] #app-content{padding-bottom:0}
+  html[data-tablet=true][data-view=home] .home-shelves{position:relative;flex:1 1 0;min-height:0;min-width:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;touch-action:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:0 0 10px;margin:0 -12px}
+  html[data-tablet=true][data-view=home] .home-shelves::-webkit-scrollbar,
+  html[data-tablet=true][data-view=home] .home-shelf-rail::-webkit-scrollbar{display:none;width:0;height:0}
+  html[data-tablet=true][data-view=home] .home-shelf{min-width:0;padding:0 0 6px}
+  html[data-tablet=true][data-view=home] .home-shelf .shelf-toolbar{height:auto;min-height:48px;padding:9px 12px;gap:8px}
+  html[data-tablet=true][data-view=home] .home-shelf .shelf-title{font-size:clamp(15px,4.5vw,24px);min-width:0}
+  html[data-tablet=true][data-view=home] .home-shelf .shelf-more{flex:0 0 auto;margin:0;width:auto;min-width:0;height:33px;font-size:12px;padding:0 9px}
+  html[data-tablet=true][data-view=home] .home-shelf-rail{display:flex;gap:16px;min-height:0;margin:0;padding:5px 12px 9px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-snap-type:x proximity;scroll-padding-inline:12px;touch-action:auto;overscroll-behavior-x:contain}
+  html[data-tablet=true][data-view=home] .home-shelf-rail .poster-card{flex:0 0 clamp(85px,35vw,150px);width:clamp(85px,35vw,150px);min-width:0}
+  html[data-tablet=true][data-view=home] .home-shelf-rail .poster-cover{width:100%;height:auto;aspect-ratio:2/3;border-radius:12px}
+  html[data-tablet=true][data-view=home] .home-shelf-rail .poster-title{font-size:14px;margin-top:8px}
+  html[data-tablet=true][data-view=home] .home-shelf-rail .rating-pill{font-size:11px}
+  html[data-tablet=true][data-view=home] .home-shelf>.empty{margin:0 12px;padding:18px}
+
+  html[data-tablet=true][data-view=home] .home-shelves{margin:0}
+  html[data-tablet=true][data-view=home] .home-hero{min-height:0;height:auto;gap:14px}
+  html[data-tablet=true][data-view=home] .hero-poster{width:clamp(80px,11vw,120px);height:auto;flex:0 0 clamp(80px,11vw,120px)}
+  html[data-tablet=true][data-view=home] .hero-desc{-webkit-line-clamp:2}
+  html[data-tablet=true][data-view=home] .home-shelf .shelf-toolbar{padding:8px 4px;min-height:42px}
+  html[data-tablet=true][data-view=home] .home-shelf .shelf-title{font-size:clamp(18px,2.2vw,25px)}
+  html[data-tablet=true][data-view=home] .home-shelf-rail{gap:14px;padding:6px 5px 10px;scroll-padding-inline:5px}
+  html[data-tablet=true][data-view=home] .home-shelf-rail .poster-card{flex:0 0 clamp(90px,min(13vw,20dvh),150px);width:clamp(90px,min(13vw,20dvh),150px)}
+  html[data-tablet=true][data-view=home] .home-shelf-rail .poster-title{font-size:clamp(13px,1.5vw,16px)}
 }
