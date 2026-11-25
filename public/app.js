@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.34 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.35 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -575,7 +575,7 @@ function drawDetails(item,loading=false) {
   const poster=imageUrl(item.poster,'w500');const key=keyFor(item);
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal switch-detail-screen" role="dialog" aria-modal="true" aria-label="${safe(item.title)}">
     <button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button>
-    <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад">‹</button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><span>UAPlay</span></div>
+    <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><span>UAPlay</span></div>
     <div class="detail-layout"><div class="detail-body"><h2>${safe(item.title)}</h2>
       <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(titleMeta(item))}</span></div>
       <p class="detail-description">${safe(item.overview || 'Опис відсутній.')}</p>
@@ -602,7 +602,7 @@ const PROVIDER_FALLBACK=[['uaserials','UASerials'],['eneyida','Eneyida'],['uafil
 function switchScreen(title,body,back='close'){
   const backAction=back==='providers'?'data-back-providers':back==='seasons'?'data-back-seasons':back==='episodes'?'data-back-episodes':'data-close';
   return `<div class="modal-backdrop switch-modal-backdrop" data-close><section class="switch-screen" role="dialog" aria-modal="true" aria-label="${safe(title)}">
-    <header class="switch-screen-header"><button type="button" class="switch-back" ${backAction} aria-label="Назад">‹</button><h1>${safe(title)}</h1></header>
+    <header class="switch-screen-header"><button type="button" class="switch-back" ${backAction} aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>${safe(title)}</h1></header>
     <div class="switch-screen-body">${body}</div>
   </section></div>`;
 }
