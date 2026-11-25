@@ -46,7 +46,7 @@ const persisted = readStore();
 const state = {
   view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
   searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {}, voicePreferences:persisted.voicePreferences || {}, groupedVoices:null,
-  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, watchedEpisodes:restoreWatchedEpisodes(persisted.watchedEpisodes,persisted.history,persisted.lastEpisode), lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', autoNextEpisode: persisted.autoNextEpisode === true, sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
+  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, watchedEpisodes:restoreWatchedEpisodes(persisted.watchedEpisodes,persisted.history,persisted.lastEpisode), lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', autoNextEpisode: persisted.autoNextEpisode === true, fullscreenMode: persisted.fullscreenMode === 'uaplay' ? 'uaplay' : 'native', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
   searchTimer:0, toastTimer:0, playerControlsTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -55,7 +55,7 @@ const year = item => String(item.date || '').slice(0,4) || '—';
 const imageUrl = (path, size = 'w500') => /^\/[\w-]+\.(?:jpg|png|webp)$/i.test(path || '') ? `https://image.tmdb.org/t/p/${size}${path}` : '';
 const externalImageUrl = url => { try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.href : ''; } catch { return ''; } };
 const unique = values => [...new Map(values.map(item => [keyFor(item),item])).values()];
-function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, voicePreferences:state.voicePreferences, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, watchedEpisodes:state.watchedEpisodes, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, autoNextEpisode:state.autoNextEpisode, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
+function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, voicePreferences:state.voicePreferences, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, watchedEpisodes:state.watchedEpisodes, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, autoNextEpisode:state.autoNextEpisode, fullscreenMode:state.fullscreenMode, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
 function notify(message) { clearTimeout(state.toastTimer);toastBox.textContent=message;toastBox.classList.add('show');state.toastTimer=setTimeout(()=>toastBox.classList.remove('show'),3000); }
 const toast = notify;
 function applyAccent() {
@@ -560,7 +560,7 @@ async function renderSettings() {
   if(id!==state.loadId||state.view!=='settings')return;
   state.tmdbConfigured=configured;
   content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div><button type="button" class="page-close" data-close-view aria-label="Закрити налаштування" title="Закрити">${icon('close')}</button></div>
-    <div class="settings-card"><h3>Загальні</h3><div class="setting-control"><span>Автоматично відтворювати наступну серію</span><button type="button" class="btn secondary" data-auto-next aria-pressed="${state.autoNextEpisode}">${state.autoNextEpisode?'Увімкнено':'Вимкнено'}</button></div><p>Для серій, що відтворюються у власному плеєрі UAPlay.</p></div>
+    <div class="settings-card"><h3>Загальні</h3><div class="setting-control"><span>Автоматично відтворювати наступну серію</span><button type="button" class="btn secondary" data-auto-next aria-pressed="${state.autoNextEpisode}">${state.autoNextEpisode?'Увімкнено':'Вимкнено'}</button></div><p>Для серій, що відтворюються у власному плеєрі UAPlay.</p>${isPhone||isTablet?'<div class="setting-control fullscreen-setting"><label for="fullscreen-mode">Повноекранний плеєр</label><select id="fullscreen-mode"><option value="native" '+(state.fullscreenMode==='native'?'selected':'')+'>Системний</option><option value="uaplay" '+(state.fullscreenMode==='uaplay'?'selected':'')+'>UAPlay</option></select></div>':''}</div>
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
     <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
@@ -568,7 +568,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.68 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.69 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -783,15 +783,15 @@ function setPlayerControls(visible, hideAfter=0) {
     if($('#video') && !$('#video').paused&&!playerSettingsOpen())frame.classList.add('controls-hidden');
   },hideAfter);
 }
-// Use the in-app viewport on phones: native iOS video fullscreen cannot
-// respect our safe-area layout or retain UAPlay's playback controls.
+// Mobile fullscreen uses the saved preference. Only the in-app mode
+// controls the safe-area layout; native fullscreen is managed by the OS.
 function phonePlayerFullscreen(){
   return !!modal.querySelector('.player-backdrop.is-player-fullscreen');
 }
 function togglePlayerFullscreen(){
   const video=$('#video');
   if(!video)return;
-  if(isPhone){
+  if((isPhone||isTablet)&&(state.fullscreenMode==='uaplay'||phonePlayerFullscreen())){
     const backdrop=video.closest('.player-backdrop');
     if(!backdrop)return;
     const active=backdrop.classList.toggle('is-player-fullscreen');
@@ -1179,6 +1179,7 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('change',event=>{
   const el=event.target,v=$('#video');
+  if(el.id==='fullscreen-mode'){state.fullscreenMode=el.value==='uaplay'?'uaplay':'native';save();return;}
   if(el.id==='catalog-sort'){state.sort=el.value;save();renderCategory(state.activeCategory);}
   if(el.id==='iptv-group'){state.iptvGroup=el.value;paintChannels();}
   if(el.id==='offline-import')importOffline(el.files?.[0]);
