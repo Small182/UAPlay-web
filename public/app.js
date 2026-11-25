@@ -557,7 +557,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.64 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.65 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -849,7 +849,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null, channelLis
     if($('#video')!==video||player?.item!==item||player.playAttempt?.switching||player.endedHandled)return;
     player.endedHandled=true;
     rememberPlayback(item,0,true);
-    if(item.type==='tv'&&state.autoNextEpisode)stepEpisode(1,true);
+    if(item.type==='tv'&&state.autoNextEpisode)stepEpisode(1);
   });
   video.addEventListener('playing',()=>{if($('#video')===video&&state.activePlayer)state.activePlayer.endedHandled=false;});
   video.addEventListener('error',()=>{const help=$('#player-help');if(help)help.textContent='Не вдалося відтворити потік. Перевірте кодек, доступність адреси, CORS або обмеження джерела.';});
@@ -912,12 +912,12 @@ function refreshMediaOptions(){
   fill('#player-quality',(h?.levels||[]).map((x,i)=>[i,(x.height||'?')+'p']), 'Авто');
   fill('#player-track',Array.from(h?.subtitleTracks?.length?h.subtitleTracks:v.textTracks||[]).map((x,i)=>[i,x.name||x.label||x.lang||x.language||('Доріжка '+(i+1))]),'Вимкнено');
 }
-async function stepEpisode(delta,automatic=false){
+async function stepEpisode(delta){
   const player=state.activePlayer,item=player?.item;
   if(!item||item.type!=='tv'||player.episodePending)return;
   player.episodePending=true;
   const season=player.season,episode=player.episode,provider=player.provider||state.activeProvider;
-  const autoNext=automatic?{sourceId:player.sourceId,voiceKey:player.voiceGroup?.rows[player.voiceGroup.index]?.key}:null;
+  const autoNext={sourceId:player.sourceId,voiceKey:player.voiceGroup?.rows[player.voiceGroup.index]?.key};
   const buttons=[...modal.querySelectorAll('[data-episode-step]')];
   buttons.forEach(b=>b.disabled=true);
   setPlayerControls(true);
