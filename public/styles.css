@@ -575,3 +575,23 @@ html[data-device=phone] .switch-detail-screen .detail-buttons .btn{width:100%;mi
   html[data-device=phone] .switch-detail-screen .detail-description span{-webkit-line-clamp:2}
   html[data-device=phone] .switch-detail-screen .detail-buttons .btn{height:32px;font-size:12px}
 }
+
+/* Tablet details: natural text height instead of the desktop 96px
+   synopsis viewport. Long descriptions extend the card, never clip a line. */
+html[data-tablet=true] .detail-backdrop{padding:0;align-items:stretch;justify-content:center}
+html[data-tablet=true] .detail-backdrop .switch-detail-screen{box-sizing:border-box;width:100%;height:100%;max-height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding-bottom:env(safe-area-inset-bottom,0px);overscroll-behavior:contain}
+html[data-tablet=true] .detail-backdrop .switch-detail-screen::-webkit-scrollbar{display:none}
+html[data-tablet=true] .switch-detail-screen .detail-layout{min-height:0;margin:12px clamp(14px,3vw,32px) 16px;padding:clamp(14px,2vw,22px);display:grid;grid-template-columns:minmax(0,1fr) clamp(120px,27vw,300px);gap:clamp(12px,2vw,24px);align-items:stretch}
+html[data-tablet=true] .switch-detail-screen .detail-body{display:flex;flex-direction:column;grid-column:1;grid-row:1;min-width:0;width:auto;padding:0;gap:12px}
+html[data-tablet=true] .switch-detail-screen .detail-heading h2{font-size:clamp(22px,3vw,31px);line-height:1.2;margin:0 0 10px;overflow-wrap:anywhere}
+html[data-tablet=true] .switch-detail-screen .detail-heading .hero-meta{font-size:clamp(14px,1.8vw,19px);margin:0;gap:8px}
+html[data-tablet=true] .switch-detail-screen .detail-description{display:block;flex:0 0 auto;height:auto;max-height:none;max-width:none;overflow:visible;white-space:normal;overflow-wrap:anywhere;font-size:clamp(15px,1.8vw,19px);line-height:1.5;margin:0;-webkit-line-clamp:unset}
+html[data-tablet=true] .switch-detail-screen .detail-description span{display:block;max-height:none;overflow:visible;-webkit-line-clamp:unset}
+html[data-tablet=true] .switch-detail-screen .detail-genres{margin:0;font-size:clamp(13px,1.5vw,16px);line-height:1.4}
+html[data-tablet=true] .switch-detail-screen .detail-buttons{margin:auto 0 0;padding-top:6px;gap:10px;flex-wrap:wrap}
+html[data-tablet=true] .switch-detail-screen .detail-buttons .btn{min-width:0;flex:1 1 120px;max-width:240px;height:46px;font-size:15px;padding:0 12px}
+html[data-tablet=true] .switch-detail-screen .detail-poster{grid-column:2;grid-row:1;align-self:start;width:100%;height:auto;max-width:none;aspect-ratio:2/3;border-radius:10px}
+html[data-tablet=true] .switch-detail-screen .detail-poster img{display:block;width:100%;height:100%;object-fit:contain}
+@media (orientation:landscape){
+  html[data-tablet=true] .switch-detail-screen .detail-layout{grid-template-columns:minmax(0,1fr) clamp(130px,min(27vw,39dvh),300px)}
+}
