@@ -59,6 +59,33 @@ function uniqueItems(items) {
   const seen=new Set();return items.filter(x=>{if(seen.has(x.url))return false;seen.add(x.url);return true;});
 }
 function cappedLabel(value) {return String(value||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,120);}
+// Retain public voice metadata without guessing a studio from the stream URL.
+function voiceText(value){
+  if(value&&typeof value==='object')value=value.name||value.title||value.label||'';
+  if(typeof value!=='string')return '';
+  const text=cappedLabel(decodeMarkup(value)).replace(/^(?:озвучення|озвучка|переклад|дубляж|voice|dub|translation)\s*[:–—-]\s*/i,'').trim();
+  if(!text||/^(?:main|default|основна|невідомо|unknown|(?:озвучення|озвучка|voice|dub|варіант|option|player|плеєр|серія|episode)\s*\d*|\d+|\d{3,4}p|auto|авто|hls|mp4|hd|fhd|uhd|4k|full hd)$/i.test(text))return '';
+  if(/(?:сезон|серія|епізод|season|episode)\s*\d|\d+\s*(?:сезон|серія|епізод|season|episode)/i.test(text))return '';
+  return text;
+}
+function explicitVoice(v){
+  for(const value of [v.voice,v.dub,v.dubbing,v.translation,v.voiceover,v.voice_name,v.dub_name,v.translation_name,v.studio,v.team]){
+    const name=voiceText(value);if(name)return name;
+  }
+  return '';
+}
+function voiceInLabel(label){
+  return /^(?:озвучення|озвучка|переклад|дубляж|voice|dub|translation)\s*[:–—-]/i.test(label)?voiceText(label):'';
+}
+function namedEpisodeItems(items){
+  const rows=uniqueItems(items).map(row=>({...row}));
+  const byUrl=new Map(rows.map(x=>[x.url,x]));
+  for(const row of items){
+    const first=byUrl.get(row.url);
+    if(first&&!voiceText(first.voice)&&voiceText(row.voice)&&Number(first.season||0)===Number(row.season||0)&&Number(first.episode||0)===Number(row.episode||0))first.voice=row.voice;
+  }
+  return rows;
+}
 function pickVideoLinks(str,base) {
   const media=[];
   // Handles explicit JS/JSON file/URL literals and direct links, including escaped slashes.
@@ -129,7 +156,7 @@ export function parseMediaDocument(body,base) {
     const attr=name=>match[1].match(new RegExp('\\bdata-'+name+'\\s*=\\s*(["\\x27])(\\d+)\\1','i'))?.[2];
     const season=Number(attr('season')||label.match(/(?:сезон|season|s)\s*(\d{1,3})/i)?.[1]||label.match(/(\d{1,3})\s*(?:сезон|season)/i)?.[1])||0;
     const episode=Number(attr('episode')||label.match(/(?:серія|серии|episode|ep|e)\s*(\d{1,4})/i)?.[1]||label.match(/(\d{1,4})\s*(?:серія|серия|episode)/i)?.[1])||0;
-    const voice=cappedLabel(match[1].match(/\bdata-voice\s*=\s*(["'])(.*?)\1/i)?.[2]||'');
+    const voice=voiceText(match[1].match(/\bdata-(?:voice|dub|dubbing|translation|studio)\s*=\s*(["'])(.*?)\1/i)?.[2])||voiceInLabel(label);
     episodes.push({...media,label:label||voice||'Відтворити',season,episode,voice});
   }
   // Public structured media metadata only; no script execution or opaque data decoding.
@@ -155,7 +182,7 @@ export function parseMediaDocument(body,base) {
       if(url&&!embeds.includes(url.href))embeds.push(url.href);
     }
   }
-  return {streams:uniqueItems([...episodes,...streams]),episodes:uniqueItems(episodes),embeds:embeds.slice(0,6)};
+  return {streams:uniqueItems([...episodes,...streams]),episodes:namedEpisodeItems(episodes),embeds:embeds.slice(0,6)};
 }
 export function parseStructuredMedia(payload,base) {
   const streams=[];const episodes=[];const seen=new Set();
@@ -174,7 +201,9 @@ export function parseStructuredMedia(payload,base) {
       const label=cappedLabel(v.title||v.name||v.label||v.voice||v.dub||context.label||'');
       const season=Number(v.season||v.season_number||label.match(/(?:сезон|season)\s*(\d+)|(\d+)\s*(?:сезон|season)/i)?.slice(1).find(Boolean)||context.season)||0;
       const episode=Number(v.episode||v.episode_number||label.match(/(?:серія|episode|епізод)\s*(\d+)|(\d+)\s*(?:серія|episode|епізод)/i)?.slice(1).find(Boolean)||(season===context.season?context.episode:0))||0;
-      const voice=cappedLabel(v.voice||v.dub||context.voice||(!season&&!episode&&v.folder?label:''));
+      const ownLabel=cappedLabel(v.title||v.name||v.label||'');
+      const nestedName=context.episode&&episode===context.episode&&ownLabel&&ownLabel!==context.label&&(v.file||v.url||v.folder)?voiceText(ownLabel):'';
+      const voice=explicitVoice(v)||voiceInLabel(ownLabel)||context.voice||nestedName||(!season&&!episode&&v.folder?voiceText(ownLabel):'');
       const ctx={label,season,episode,voice};
       for(const [key,value] of Object.entries(v).slice(0,110)){
         if(['url','file','source','src','video','stream','hls','mp4','playlist','folder','result','data','players','links','episodes','seasons','items','sources','iframe','embed','qualities','voice','dubbing'].includes(key.toLowerCase()))walk(value,depth+1,ctx);
@@ -183,7 +212,7 @@ export function parseStructuredMedia(payload,base) {
   }
   walk(payload);
   const all=uniqueItems(streams).slice(0,50);
-  return {streams:all,episodes:uniqueItems(episodes).slice(0,80)};
+  return {streams:all,episodes:namedEpisodeItems(episodes).slice(0,80)};
 }
 // Shared transport: ordinary redirects and transient retry only.
 export async function providerRequest(input,options={},fetcher=fetch){
@@ -325,7 +354,7 @@ export async function resolveProviderMedia(provider,id,fetcher=fetch){
     if(result.streams.length>=50)break;
   }
   result.streams=uniqueItems(result.streams).slice(0,50);
-  result.episodes=uniqueItems(result.episodes).slice(0,80);
+  result.episodes=namedEpisodeItems(result.episodes).slice(0,80);
   result.mediaStatus=(result.streams.length||result.playerEmbeds.length)?'available':result.warnings.some(w=>[401,403,451].includes(w.status))?'access_denied':result.warnings.length?'upstream_error':result.embedCount?'no_supported_media':'no_public_media';
   if(result.mediaStatus==='access_denied'||availability)result.playerEmbeds=[];
   if(!result.streams.length&&availability){result.mediaStatus=availability.status;result.warnings.unshift({status:0,message:availability.message});}

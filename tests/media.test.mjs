@@ -153,3 +153,18 @@ test('Switch-style public literal playlist preserves episode hierarchy',()=>{
   assert.deepEqual(out.episodes.map(x=>[x.season,x.episode,x.voice]),[[1,1,'Studio'],[1,3,'Studio']]);
  }
 });
+
+test('explicit translation names and nested voice labels survive episode parsing',()=>{
+ const playlist=[{title:'Сезон 1',folder:[{title:'Серія 1',folder:[{title:'Studio A',file:'https://example.org/a.m3u8'},{translation:{name:'Studio B'},file:'https://example.org/b.m3u8'},{title:'1080p',file:'https://example.org/c.m3u8'}]}]}];
+ const out=parseMediaDocument('<script type="application/json">'+JSON.stringify({playlist})+'</script>','https://example.org/page');
+ assert.deepEqual(out.episodes.map(x=>[x.season,x.episode,x.voice]),[[1,1,'Studio A'],[1,1,'Studio B'],[1,1,'']]);
+});
+test('public data-translation attribute supplies voice name',()=>{
+ const out=parseMediaDocument('<li data-file="https://example.org/a.m3u8" data-season="1" data-episode="2" data-translation="Studio A">Серія 2</li>','https://example.org/page');
+ assert.equal(out.episodes[0].voice,'Studio A');
+});
+test('duplicate episode metadata can enrich a missing voice name',()=>{
+ const body='<li data-file="https://example.org/a.m3u8" data-season="1" data-episode="2">Серія 2</li><script type="application/json">'+JSON.stringify({playlist:[{season:1,episode:2,voice:{name:'Studio A'},file:'https://example.org/a.m3u8'}]})+'</script>';
+ const out=parseMediaDocument(body,'https://example.org/page');
+ assert.equal(out.episodes.length,1);assert.equal(out.episodes[0].voice,'Studio A');
+});

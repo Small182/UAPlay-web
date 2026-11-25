@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.38 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.39 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -575,7 +575,7 @@ function drawDetails(item,loading=false) {
   const poster=imageUrl(item.poster,'w500');const key=keyFor(item);
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal switch-detail-screen" role="dialog" aria-modal="true" aria-label="${safe(item.title)}">
     <button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button>
-    <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><span>UAPlay</span><button type="button" class="page-close switch-screen-close" data-close aria-label="Закрити" title="Закрити">${icon('close')}</button></div>
+    <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><button type="button" class="page-close switch-screen-close" data-close aria-label="Закрити" title="Закрити">${icon('close')}</button></div>
     <div class="detail-layout"><div class="detail-body"><h2>${safe(item.title)}</h2>
       <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(titleMeta(item))}</span></div>
       <p class="detail-description">${safe(item.overview || 'Опис відсутній.')}</p>
@@ -757,7 +757,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
         <div class="switch-player-tools"><button type="button" class="switch-player-tool" data-player-settings aria-controls="player-settings" aria-expanded="false" aria-label="Налаштування плеєра" title="Налаштування">${icon('settings')}</button><button type="button" class="switch-fullscreen switch-player-tool" data-fullscreen aria-label="Повний екран" title="Повний екран"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
       </div></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
-    <section id="player-settings" class="player-settings-menu" role="region" aria-label="Налаштування плеєра" hidden><div class="player-settings-heading"><h3>Налаштування</h3><button type="button" class="player-settings-close" data-close-player-settings aria-label="Закрити налаштування">${icon('close')}</button></div><div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div></div></section>
+    <section id="player-settings" class="player-settings-menu" role="region" aria-label="Налаштування плеєра" hidden><div class="player-settings-heading"><h3>Налаштування</h3><button type="button" class="player-settings-close" data-close-player-settings aria-label="Закрити налаштування">${icon('close')}</button></div><div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div></div></section>
     <div class="player-help" id="player-help">${presetUrl?'Потік з джерела. Натисніть ▶, якщо Safari не дозволив автоматичний запуск.':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
     </section></div>`;
   const video=$('#video');
@@ -808,7 +808,7 @@ async function startPlayback(raw,{resumeAt=null,autoplay=true}={}) {
   const current=()=>$('#video')===video&&state.activePlayer===player&&player.playAttempt===attempt;
   if(!player.key.startsWith('iptv:')){state.sources[player.key]=url.href;save();}
   if(state.hls){state.hls.destroy();state.hls=null;}
-  if(attempt.switching){video.pause();video.removeAttribute('src');video.load();for(const id of ['#player-quality','#player-audio']){const el=$(id);if(el)el.value='-1';}}
+  if(attempt.switching){video.pause();video.removeAttribute('src');video.load();for(const id of ['#player-quality']){const el=$(id);if(el)el.value='-1';}}
   const isHls=/\.m3u8(?:$|[?#])/i.test(url.pathname+url.search);
   const help=$('#player-help');
   if(isHls && !video.canPlayType('application/vnd.apple.mpegurl')){
@@ -854,7 +854,6 @@ function refreshMediaOptions(){
   const h=state.hls;
   const fill=(selector,rows,defaultLabel)=>{const el=$(selector);if(!el)return;const selected=el.value;el.innerHTML='<option value="-1">'+defaultLabel+'</option>'+rows.map(([i,t])=>'<option value="'+i+'">'+safe(t)+'</option>').join('');if([...el.options].some(o=>o.value===selected))el.value=selected;};
   fill('#player-quality',(h?.levels||[]).map((x,i)=>[i,(x.height||'?')+'p']), 'Авто');
-  fill('#player-audio',Array.from(h?.audioTracks||v.audioTracks||[]).map((x,i)=>[i,x.name||x.label||x.lang||x.language||('Доріжка '+(i+1))]),'За замовчуванням');
   fill('#player-track',Array.from(h?.subtitleTracks?.length?h.subtitleTracks:v.textTracks||[]).map((x,i)=>[i,x.name||x.label||x.lang||x.language||('Доріжка '+(i+1))]),'Вимкнено');
 }
 async function stepEpisode(delta){
@@ -1008,7 +1007,6 @@ document.addEventListener('change',event=>{
   if(el.id==='player-rate'&&v){state.playerRate=Number(el.value);v.playbackRate=state.playerRate;}
   if(el.id==='player-volume'&&v){state.playerVolume=Number(el.value);try{v.volume=state.playerVolume;if(Math.abs(v.volume-state.playerVolume)>0.01)toast('На iPhone використовуйте системні кнопки гучності');}catch{}setPlayerControls(true,3000);}
   if(el.id==='player-quality'&&state.hls)state.hls.currentLevel=Number(el.value);
-  if(el.id==='player-audio'&&v){const n=Number(el.value);if(n>=0){if(state.hls)state.hls.audioTrack=n;else Array.from(v.audioTracks||[]).forEach((t,i)=>{t.enabled=i===n;});}}
   if(el.id==='local-subtitle')addLocalSubtitle(el.files?.[0]);
   if(el.id==='subtitle-size'&&v)v.style.setProperty('--cue-size',Number(el.value)+'%');
   if(el.id==='player-track'&&v){const n=Number(el.value);if(state.hls?.subtitleTracks?.length)state.hls.subtitleTrack=n;else Array.from(v.textTracks||[]).forEach((t,i)=>{t.mode=i===n?'showing':'disabled';});}

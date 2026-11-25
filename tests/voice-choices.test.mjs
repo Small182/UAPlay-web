@@ -24,3 +24,8 @@ test('resume position survives a source switch and respects duration',()=>{
  assert.equal(voiceResumeTime(15,Infinity),15);
  assert.equal(voiceResumeTime(NaN,100),0);
 });
+
+test('explicitly named labels are used without treating episode or quality labels as studios',()=>{
+ const rows=voiceChoices('eneyida',true,[{url:'a',label:'Озвучення: Studio A'},{url:'b',label:'Серія 1'},{url:'c',voice:'1080p'}]);
+ assert.deepEqual(rows.map(x=>x.label),['Studio A','Озвучення 2','Озвучення 3']);
+});

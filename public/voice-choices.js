@@ -5,8 +5,9 @@ export function voiceChoices(provider,isTV,streams){
   for(const stream of streams||[]){
     if(!stream?.url||seen.has(stream.url))continue;
     seen.add(stream.url);
-    const raw=String(stream.voice||'').trim();
-    const name=raw&&!/^(main|основна|default)$/i.test(raw)?raw:'';
+    const explicitLabel=String(stream.label||'').match(/^(?:озвучення|озвучка|переклад|дубляж|voice|dub|translation)\s*[:–—-]\s*(.+)$/i)?.[1];
+    const raw=String(stream.voice||explicitLabel||'').trim();
+    const name=raw&&!/^(?:main|основна|default|unknown|невідомо|(?:озвучення|voice|варіант)\s*\d*|\d{3,4}p|hls|mp4|\d+)$/i.test(raw)?raw:'';
     const key=name?name.normalize('NFKC').toLowerCase(): '';
     const n=(names.get(key)||0)+1;names.set(key,n);
     rows.push({url:stream.url,label:name?(n>1?name+' ('+n+')':name):'Озвучення '+(rows.length+1),key:key?'name:'+key+':'+n:'unknown:'+n});
