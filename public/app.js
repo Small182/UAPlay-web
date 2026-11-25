@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.46 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.47 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -671,8 +671,6 @@ function openEmbeddedPlayer(provider,value){
   cleanupPlayer();state.activePlayer=null;
   modal.innerHTML=switchScreen(state.activeItem?.title||'Вбудований плеєр',`<div class="provider-embed">
     <iframe class="provider-video-frame" src="${safe(target)}" title="Відеоплеєр джерела" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen; autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
-    <div class="provider-browser-actions"><button class="btn secondary" type="button" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}">Назад до варіантів</button></div>
-    <p class="section-note">${provider==='uafilm'&&state.activeItem?.type==='tv'?'Оберіть потрібний сезон і серію у вбудованому плеєрі. ':''}Керування відтворенням надає сам плеєр. Якщо джерело не дозволяє вбудовування, оберіть інший варіант.</p>
     </div>`,'providers');
 }
 function renderStreamChoices(data){
