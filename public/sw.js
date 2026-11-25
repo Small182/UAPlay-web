@@ -1,5 +1,5 @@
-const CACHE = 'uaplay-shell-v0.5.52';
-const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/provider-frame.js', '/episode-choices.js', '/voice-choices.js', '/desktop-layout.js', '/builtin-wallpapers.js', '/wallpapers/aurora.svg', '/wallpapers/mountains.svg', '/wallpapers/ocean.svg', '/wallpapers/space.svg', '/wallpapers/dunes.svg', '/wallpapers/geometry.svg', '/manifest.webmanifest', '/icons/icon.svg', '/icons/web-qr.svg', '/data/demo.json'];
+const CACHE = 'uaplay-shell-v0.5.53';
+const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/provider-frame.js', '/episode-choices.js', '/voice-choices.js', '/desktop-layout.js', '/builtin-wallpapers.js', '/wallpapers/aurora.svg', '/wallpapers/mountains.svg', '/wallpapers/ocean.svg', '/wallpapers/space.svg', '/wallpapers/dunes.svg', '/wallpapers/geometry.svg', '/manifest.webmanifest', '/icons/icon.svg', '/icons/apple-touch-icon-turquoise.png', '/icons/icon-192-turquoise.png', '/icons/icon-512-turquoise.png', '/icons/web-qr.svg', '/data/demo.json'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
