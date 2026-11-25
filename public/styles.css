@@ -326,7 +326,7 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
 }
 
 /* Phone-only landscape layout (including iPhone safe areas).
-   The catalogue scrolls vertically on the left; the selected title stays on the right. */
+   The selected title stays on the left; popular shelves scroll on the right. */
 @media (orientation:landscape){
   html[data-device=phone] .main-shell{max-width:none;width:100%;min-height:100%}
   html[data-device=phone] .topbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:minmax(0,1fr);height:48px;min-height:48px;gap:8px;padding:0 10px}
@@ -339,7 +339,7 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   html[data-device=phone] .topbar .search-action span{display:none}
   html[data-device=phone] .topbar .search-action svg,html[data-device=phone] .topbar .settings-action svg{width:20px;height:20px}
   html[data-device=phone] .topbar .header-clock{font-size:17px;min-width:46px;letter-spacing:-.5px}
-  html[data-device=phone][data-view=home] #app-content{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"toolbar hero" "catalog hero";gap:0 12px;padding:8px 10px 6px;min-height:0}
+  html[data-device=phone][data-view=home] #app-content{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);grid-template-rows:minmax(0,1fr);grid-template-areas:"hero catalog";gap:0 12px;padding:8px 10px 6px;min-height:0}
   html[data-device=phone][data-view=home] .shelf-toolbar{grid-area:toolbar;min-width:0;height:auto;min-height:38px;padding:0 0 5px;gap:5px}
   html[data-device=phone][data-view=home] .shelf-title{font-size:clamp(13px,2.15vw,19px);line-height:1.15;min-width:0;overflow-wrap:anywhere}
   html[data-device=phone][data-view=home] .shelf-actions{gap:4px;flex-shrink:0}
@@ -376,7 +376,7 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
 
 /* Compact phone landscape toolbar and safe insets for overlays. */
 @media (orientation:landscape){
-  html[data-device=phone][data-view=home] #app-content{grid-template-rows:34px minmax(0,1fr);align-content:start}
+  html[data-device=phone][data-view=home] #app-content{grid-template-rows:minmax(0,1fr);align-content:stretch}
   html[data-device=phone][data-view=home] .shelf-toolbar{height:34px;min-height:0;padding:0;align-self:start;flex-wrap:nowrap;justify-content:space-between}
   html[data-device=phone][data-view=home] #home-rail{padding-top:3px}
   html[data-device=phone] .app-shell{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -417,4 +417,27 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   html[data-device=phone][data-view=home] .home-shelf-rail .poster-title{font-size:14px;margin-top:8px}
   html[data-device=phone][data-view=home] .home-shelf-rail .rating-pill{font-size:11px}
   html[data-device=phone][data-view=home] .home-shelf>.empty{margin:0 12px;padding:18px}
+}
+
+/* Both phone orientations render the same shelf list. In landscape the
+   fixed hero moves to the left, with independently scrollable shelves right. */
+@media (orientation:landscape){
+  html[data-device=phone][data-view=home] .home-shelves{grid-area:catalog;position:relative;min-width:0;min-height:0;width:100%;height:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;touch-action:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:0 0 8px;container-type:size}
+  html[data-device=phone][data-view=home] .home-shelves::-webkit-scrollbar,
+  html[data-device=phone][data-view=home] .home-shelf-rail::-webkit-scrollbar,
+  html[data-device=phone][data-view=home] .hero-desc::-webkit-scrollbar{display:none;width:0;height:0}
+  html[data-device=phone][data-view=home] .home-shelf{min-width:0;padding:0 0 6px}
+  html[data-device=phone][data-view=home] .home-shelf .shelf-toolbar{min-width:0;height:32px;min-height:32px;padding:0 4px 3px;gap:6px;justify-content:space-between;flex-wrap:nowrap}
+  html[data-device=phone][data-view=home] .home-shelf .shelf-title{font-size:clamp(13px,2.15vw,19px);line-height:1.15}
+  html[data-device=phone][data-view=home] .home-shelf .shelf-more{flex:0 0 auto;min-width:0;width:auto;margin:0;height:28px;padding:0 8px;font-size:11px}
+  html[data-device=phone][data-view=home] .home-shelf-rail{display:flex;align-items:flex-start;gap:10px;min-height:0;margin:0;padding:5px 5px 9px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-snap-type:x proximity;scroll-padding-inline:5px;touch-action:auto;overscroll-behavior-x:contain}
+  html[data-device=phone][data-view=home] .home-shelf-rail .poster-card{flex:0 0 clamp(75px,15vw,130px);width:clamp(75px,15vw,130px);min-width:0}
+  html[data-device=phone][data-view=home] .home-shelf-rail .poster-cover{width:100%;height:auto;aspect-ratio:2/3;border-radius:8px}
+  html[data-device=phone][data-view=home] .home-shelf-rail .poster-title{font-size:12px;line-height:1.25;margin-top:5px}
+  html[data-device=phone][data-view=home] .home-shelf-rail .rating-pill{font-size:10px;padding:3px 5px;bottom:4px;left:4px}
+  html[data-device=phone][data-view=home] .home-shelf>.empty{padding:18px;margin:0 4px}
+  html[data-device=phone][data-view=home] .hero-desc{scrollbar-width:none}
+  @supports(width:1cqh){
+    html[data-device=phone][data-view=home] .home-shelf-rail .poster-card{flex-basis:clamp(64px,min(30cqw,36cqh),130px);width:clamp(64px,min(30cqw,36cqh),130px)}
+  }
 }

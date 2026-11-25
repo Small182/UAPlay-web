@@ -286,7 +286,7 @@ function updateHero(movie){
 function homePosterCards(items,movie){
   return items.map(item=>posterCard(item).replace('class="poster-card"',`class="poster-card ${movie&&keyFor(item)===keyFor(movie)?'selected':''}" data-home-item="${safe(keyFor(item))}"`)).join('');
 }
-function renderPhonePortraitShelves(movie){
+function renderPhoneShelves(movie){
   return '<div id="home-shelves" class="home-shelves" aria-label="Популярні добірки">'+HOME_SHELVES.map(([name,section],index)=>{
     const items=state.home[section]||[];
     return `<section class="home-shelf" data-home-shelf="${index}" aria-label="${safe(name)}"><div class="shelf-toolbar"><div class="shelf-title">${safe(name)}</div><button class="btn shelf-more" data-view="${section}">Більше &nbsp;›</button></div>
@@ -309,9 +309,9 @@ async function renderHome() {
   state.homeShelf=Math.min(state.homeShelf||0,HOME_SHELVES.length-1);
   const [name,section]=HOME_SHELVES[state.homeShelf];
   const items=state.home[section]||[];
-  const movie=(phonePortrait()?previousHero:null)||items[0]||state.home.trending?.[0]||state.demo[0];
-  if(phonePortrait()){
-    content.innerHTML=`${modeBanner()}${heroPanel(movie)}${renderPhonePortraitShelves(movie)}`;
+  const movie=(isPhone?previousHero:null)||items[0]||state.home.trending?.[0]||state.demo[0];
+  if(isPhone){
+    content.innerHTML=`${modeBanner()}${heroPanel(movie)}${renderPhoneShelves(movie)}`;
     const shelves=$('#home-shelves');
     const groups=Array.from(shelves.querySelectorAll('[data-home-shelf]'));
     if(previousScroll!==undefined){
@@ -554,7 +554,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.56 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.57 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -992,7 +992,6 @@ document.addEventListener('click',async event=>{
 // Desktop home: fit whole posters to the visible rail, and map wheel to card scrolling.
 const phoneOrientation=matchMedia('(orientation: landscape)');
 const phoneLandscape=()=>isPhone&&phoneOrientation.matches;
-const phonePortrait=()=>isPhone&&!phoneOrientation.matches;
 let observedHomeRail=null,homeRailObserver=null,wheelRail=null,wheelTarget=0,wheelTime=0,wheelDelta=0;
 function fitHomeRail(){
   const rail=observedHomeRail;
@@ -1011,7 +1010,7 @@ function observeHomeRail(){
   if(typeof ResizeObserver==='function'){homeRailObserver=new ResizeObserver(fitHomeRail);homeRailObserver.observe(observedHomeRail);}
 }
 window.addEventListener('resize',fitHomeRail,{passive:true});
-phoneOrientation.addEventListener?.('change',()=>{if(!isPhone)return;if(state.view==='home'&&Object.keys(state.home).length){renderHome();return;}fitHomeRail();});
+phoneOrientation.addEventListener?.('change',fitHomeRail);
 document.addEventListener('wheel',event=>{
   if(state.view!=='home'||modal.innerHTML||isPhone||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
   const rail=$('#home-rail');
@@ -1095,7 +1094,9 @@ document.addEventListener('keydown',event=>{
   if(event.key==='/'&&!modal.innerHTML){event.preventDefault();showView('search').then(()=>$('#search-input')?.focus());}
   if(!modal.innerHTML&&state.view==='home'&&(event.key==='ArrowUp'||event.key==='ArrowDown')){
     event.preventDefault();state.homeShelf=((state.homeShelf||0)+(event.key==='ArrowDown'?1:-1)+HOME_SHELVES.length)%HOME_SHELVES.length;
-    renderHome();
+    const shelves=$('#home-shelves');
+    if(shelves){const group=shelves.querySelector('[data-home-shelf="'+state.homeShelf+'"]');if(group)shelves.scrollTo({top:group.offsetTop,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
+    else renderHome();
   }
 });
 $('#search-shortcut').addEventListener('click',()=>showView('search').then(()=>$('#search-input')?.focus()));
