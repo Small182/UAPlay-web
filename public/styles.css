@@ -522,3 +522,56 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   html[data-tablet=true][data-view=home] .home-shelf-rail .poster-card{flex:0 0 clamp(90px,min(13vw,20dvh),150px);width:clamp(90px,min(13vw,20dvh),150px)}
   html[data-tablet=true][data-view=home] .home-shelf-rail .poster-title{font-size:clamp(13px,1.5vw,16px)}
 }
+
+/* Phone title-details dialog. The navigation and action buttons never
+   scroll away. The card uses the entire available safe-area viewport. */
+html[data-device=phone] .detail-backdrop{padding:0;align-items:stretch;justify-content:stretch}
+html[data-device=phone] .detail-backdrop .switch-detail-screen{box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;max-height:100%;min-height:0;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);overflow:hidden}
+html[data-device=phone] .switch-detail-screen .switch-screen-header{flex:0 0 auto}
+html[data-device=phone] .switch-detail-screen .detail-layout{box-sizing:border-box;display:grid;flex:1 1 0;min-height:0;min-width:0;max-height:none;overflow:hidden;margin:4px 12px 12px;padding:14px;gap:10px 12px;align-items:start;grid-template-columns:minmax(0,1fr) minmax(0,auto);grid-template-rows:auto minmax(0,1fr) auto auto}
+html[data-device=phone] .switch-detail-screen .detail-body{display:contents}
+html[data-device=phone] .switch-detail-screen .detail-heading{grid-column:1/-1;grid-row:1;min-width:0}
+html[data-device=phone] .switch-detail-screen .detail-heading h2{font-size:clamp(21px,5.8vw,30px);line-height:1.18;overflow-wrap:anywhere;margin:0 0 8px}
+html[data-device=phone] .switch-detail-screen .detail-heading .hero-meta{gap:8px;font-size:14px;line-height:1.3;margin:0}
+html[data-device=phone] .switch-detail-screen .detail-description{grid-column:1;grid-row:2;align-self:stretch;min-width:0;min-height:0;max-height:none;max-width:none;overflow-y:auto;overflow-x:hidden;overflow-wrap:anywhere;font-size:15px;line-height:1.5;margin:0;scrollbar-width:none;overscroll-behavior:contain}
+html[data-device=phone] .switch-detail-screen .detail-description::-webkit-scrollbar{display:none}
+html[data-device=phone] .switch-detail-screen .detail-genres{grid-column:1/-1;grid-row:3;min-width:0;line-height:1.3;margin:0;overflow-wrap:anywhere}
+html[data-device=phone] .switch-detail-screen .detail-poster{grid-column:2;grid-row:2;align-self:start;width:clamp(116px,40vw,190px);height:auto;max-width:none;max-height:100%;aspect-ratio:2/3;min-width:0;min-height:0;flex:none;border-radius:10px;background:transparent}
+html[data-device=phone] .switch-detail-screen .detail-poster img{display:block;width:100%;height:100%;object-fit:contain}
+html[data-device=phone] .switch-detail-screen .detail-buttons{grid-column:1/-1;grid-row:4;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-self:end;margin:0;width:100%}
+html[data-device=phone] .switch-detail-screen .detail-buttons .btn{width:100%;min-width:0;height:clamp(44px,6.5dvh,58px);font-size:16px;padding:0 10px;white-space:nowrap}
+@media (orientation:portrait) and (display-mode:standalone){
+  html[data-device=phone] .detail-backdrop .switch-detail-screen{padding-top:0}
+}
+@media (orientation:portrait) and (max-height:620px){
+  html[data-device=phone] .switch-detail-screen .detail-layout{gap:7px;padding:10px}
+  html[data-device=phone] .switch-detail-screen .detail-buttons{grid-template-columns:repeat(2,minmax(0,1fr))}
+  html[data-device=phone] .switch-detail-screen .detail-buttons .btn{font-size:14px}
+}
+@media (orientation:landscape){
+  html[data-device=phone] .detail-backdrop{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+  html[data-device=phone] .detail-backdrop .switch-detail-screen{padding:0}
+  html[data-device=phone] .switch-detail-screen .detail-layout{container-type:size;grid-template-columns:minmax(0,1fr) minmax(0,30%);grid-template-rows:auto minmax(0,1fr) auto auto;margin:2px 12px 8px;padding:10px;gap:6px 12px;align-items:start}
+  html[data-device=phone] .switch-detail-screen .detail-heading{grid-column:1;grid-row:1}
+  html[data-device=phone] .switch-detail-screen .detail-heading h2{font-size:clamp(17px,3.1vw,25px);line-height:1.15;margin:0 0 4px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  html[data-device=phone] .switch-detail-screen .detail-heading .hero-meta{font-size:13px;line-height:1.2;gap:8px}
+  html[data-device=phone] .switch-detail-screen .detail-description{grid-column:1;grid-row:2;font-size:14px;line-height:1.35;overflow:hidden}
+  html[data-device=phone] .switch-detail-screen .detail-description span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--detail-lines,4);overflow:hidden}
+  html[data-device=phone] .switch-detail-screen .detail-genres{grid-column:1;grid-row:3;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html[data-device=phone] .switch-detail-screen .detail-poster{grid-column:2;grid-row:1/5;align-self:stretch;justify-self:center;width:100%;height:100%;max-height:100%;aspect-ratio:auto}
+  html[data-device=phone] .switch-detail-screen .detail-buttons{grid-column:1;grid-row:4;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  html[data-device=phone] .switch-detail-screen .detail-buttons .btn{height:38px;font-size:14px;padding:0 5px}
+  @supports(width:1cqh){
+    html[data-device=phone] .switch-detail-screen .detail-layout{grid-template-columns:minmax(0,1fr) minmax(0,min(34%,calc(100cqh * 2 / 3)))}
+  }
+}
+@media (orientation:landscape) and (min-height:420px){
+  html[data-device=phone] .switch-detail-screen .detail-description span{-webkit-line-clamp:6}
+}
+@media (orientation:landscape) and (max-height:340px){
+  html[data-device=phone] .switch-detail-screen .detail-layout{padding:7px;gap:4px 8px}
+  html[data-device=phone] .switch-detail-screen .detail-heading h2{font-size:17px}
+  html[data-device=phone] .switch-detail-screen .detail-description{font-size:12px}
+  html[data-device=phone] .switch-detail-screen .detail-description span{-webkit-line-clamp:2}
+  html[data-device=phone] .switch-detail-screen .detail-buttons .btn{height:32px;font-size:12px}
+}

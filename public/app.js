@@ -556,7 +556,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.59 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.60 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -604,13 +604,13 @@ async function openDetails(key) {
 }
 function drawDetails(item) {
   const poster=imageUrl(item.poster,'w500');const key=keyFor(item);
-  modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal switch-detail-screen" role="dialog" aria-modal="true" aria-label="${safe(item.title)}">
+  modal.innerHTML=`<div class="modal-backdrop detail-backdrop" data-close><section class="detail-modal switch-detail-screen" role="dialog" aria-modal="true" aria-label="${safe(item.title)}">
     <button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button>
     <div class="switch-screen-header"><button type="button" class="switch-back" data-close aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Про ${item.type==='tv'?'серіал':'фільм'}</h1><button type="button" class="page-close switch-screen-close" data-close aria-label="Закрити" title="Закрити">${icon('close')}</button></div>
-    <div class="detail-layout"><div class="detail-body"><h2>${safe(item.title)}</h2>
-      <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(titleMeta(item))}</span></div>
-      <p class="detail-description">${safe(item.overview || 'Опис відсутній.')}</p>
-      ${item.genres?.length?`<p class="section-note">${safe(item.genres.join(' · '))}</p>`:''}
+    <div class="detail-layout"><div class="detail-body"><div class="detail-heading"><h2>${safe(item.title)}</h2>
+      <div class="hero-meta"><span class="stars">★ ${Number(item.rating||0).toFixed(1)}</span><span>${safe(titleMeta(item))}</span></div></div>
+      <p class="detail-description"><span>${safe(item.overview || 'Опис відсутній.')}</span></p>
+      ${item.genres?.length?`<p class="section-note detail-genres">${safe(item.genres.join(' · '))}</p>`:''}
       <div class="detail-buttons"><button class="btn primary" data-sources="${safe(key)}">${icon('play')} Дивитися</button>
       <button class="btn secondary" data-favorite="${safe(key)}">${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}</button></div>
 
