@@ -201,3 +201,43 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   .switch-screen,.switch-detail-screen{padding-top:0}
 }
 .topbar,.topbar .brand,.topbar-actions,.header-nav{filter:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+
+/* v0.5.28: full-width desktop layout, responsive home posters, compact IPTV stars. */
+.channel-entry{position:relative;display:block;min-width:0}
+.channel-entry .channel-card{width:100%;height:100%;min-height:78px;padding:13px 46px 13px 13px;color:var(--text);gap:12px}
+.channel-entry .channel-logo{flex:0 0 52px;width:52px;height:48px}
+.channel-entry .channel-name{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25}
+.channel-entry .channel-group{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+.channel-star{position:absolute;top:5px;right:5px;width:38px;height:38px;display:grid;place-items:center;border:0;border-radius:9px;padding:0;background:transparent;color:var(--muted);z-index:1}
+.channel-star svg{width:22px;height:22px;stroke-width:1.7}
+.channel-star[aria-pressed=true]{color:var(--accent)}
+.channel-star:hover{background:#ffffff12;color:var(--text)}
+.channel-star[aria-pressed=true]:hover{color:var(--accent)}
+:root[data-theme=light] .channel-star[aria-pressed=true]{color:#19776a}
+:root[data-theme=light] .channel-star:hover{background:#0000000c}
+.iptv-filter-favorites{border:1px solid var(--line);border-radius:10px;padding:0 12px;height:42px;background:transparent;color:var(--text);font-size:14px;font-weight:550}
+.iptv-filter-favorites[aria-pressed=true]{background:var(--panel2);border-color:var(--accent)}
+@media(max-width:760px){.channel-star{width:44px;height:44px;top:3px;right:3px}.channel-entry .channel-card{padding-right:52px}}
+@media(min-width:761px){
+  .main-shell{max-width:none;width:100%;min-height:100dvh;margin:0}
+  main{padding:clamp(12px,1.25vw,24px) clamp(16px,2vw,40px) 18px;min-height:calc(100dvh - 80px)}
+  .topbar{padding-left:clamp(16px,2vw,40px);padding-right:clamp(16px,2vw,40px)}
+  .poster-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:clamp(16px,1.5vw,30px);padding:10px 0 30px}
+  .channel-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:12px}
+  :root[data-view=iptv] .search-box{max-width:none}
+  :root[data-view=home] .home-hero{height:clamp(180px,29dvh,300px);min-height:0}
+  :root[data-view=home] .hero-poster{height:100%;width:auto;flex:0 0 auto;aspect-ratio:2/3}
+  :root[data-view=home] .hero-desc{max-width:100%;-webkit-line-clamp:3}
+  :root[data-view=home] .shelf-toolbar{height:clamp(54px,8dvh,80px)}
+  :root[data-view=home] #home-rail{gap:clamp(12px,1.3vw,24px);padding:8px 8px 12px;scroll-padding-inline:8px;scroll-snap-type:x mandatory;scrollbar-width:thin}
+  :root[data-view=home] #home-rail .poster-card{flex:0 0 var(--rail-card-width,150px);width:var(--rail-card-width,150px);min-width:0;scroll-snap-align:start}
+  :root[data-view=home] #home-rail .poster-cover{width:100%;height:auto;aspect-ratio:2/3}
+  :root[data-view=home] #home-rail .poster-title{font-size:clamp(14px,1.1vw,20px)}
+}
+@media(min-width:761px) and (max-height:650px){
+  :root[data-view=home] .home-hero{height:160px}
+  :root[data-view=home] .hero-title{font-size:25px;margin-bottom:6px}
+  :root[data-view=home] .hero-meta{font-size:15px;margin-bottom:5px}
+  :root[data-view=home] .hero-desc{font-size:14px;-webkit-line-clamp:2}
+  :root[data-view=home] .hero-buttons .btn{height:38px;font-size:14px}
+}

@@ -1,3 +1,4 @@
+import { homeRailMetrics, wheelCardIndex } from './desktop-layout.js';
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
 import { episodeChoices, providerEpisodeFrames } from './episode-choices.js';
 import { voiceChoices, preferredVoiceIndex, voiceResumeTime } from './voice-choices.js';
@@ -215,6 +216,7 @@ async function renderHome() {
     ${items.length?`<div class="poster-rail switch-rail" id="home-rail">${items.map(item=>posterCard(item).replace('class="poster-card"',`class="poster-card ${movie&&keyFor(item)===keyFor(movie)?'selected':''}" data-home-item="${safe(keyFor(item))}"`)).join('')}</div>`:'<div class="empty">Добірка порожня</div>'}
     `;
   enrichHero(movie);
+  observeHomeRail();
 }
 function animationTabs(section){
   if(!['animation','cartoons','anime'].includes(section))return '';
@@ -403,7 +405,7 @@ async function renderIptv() {
   const id=++state.loadId;
   content.innerHTML=`<div class="page-intro"><div><h1>IPTV</h1><p>Прямі трансляції з відкритих плейлистів iptv-org</p></div></div>
     <div class="setting-control" style="margin-bottom:20px"><label for="iptv-country">Країна</label><select id="iptv-country" aria-label="Країна IPTV">${countryOptions()}</select></div>
-    <label class="search-box">${icon('search')}<input type="search" id="channel-search" value="${safe(state.channelQuery)}" placeholder="Знайти телеканал…" aria-label="Пошук телеканалів"></label><div class="setting-control"><label for="iptv-group">Жанр</label><select id="iptv-group"><option value="">Усі жанри</option></select><button type="button" class="btn secondary" data-iptv-favorites>${state.iptvOnlyFavorites?"Усі канали":"★ Вибране"}</button></div><div id="iptv-results"><p class="muted">Завантажуємо канали…</p></div>`;
+    <label class="search-box">${icon('search')}<input type="search" id="channel-search" value="${safe(state.channelQuery)}" placeholder="Знайти телеканал…" aria-label="Пошук телеканалів"></label><div class="setting-control"><label for="iptv-group">Жанр</label><select id="iptv-group"><option value="">Усі жанри</option></select><button type="button" class="iptv-filter-favorites" data-iptv-favorites aria-pressed="${state.iptvOnlyFavorites}">${state.iptvOnlyFavorites?"Усі канали":"☆ Вибране"}</button></div><div id="iptv-results"><p class="muted">Завантажуємо канали…</p></div>`;
   $('#iptv-country').value=state.iptvCountry;
   try {const result=await api(`/api/iptv?country=${state.iptvCountry}`);if(id!==state.loadId)return;state.channels=result.channels||[];paintChannels();}
   catch(e){if(id!==state.loadId)return;$('#iptv-results').innerHTML=`<div class="empty"><h2>Не вдалося завантажити IPTV</h2><p>${safe(e.message)}</p><button type="button" class="btn primary" data-refresh-iptv>Спробувати знову</button></div>`;}
@@ -418,8 +420,8 @@ function paintChannels() {
   const channels=state.visibleChannels;
   target.innerHTML=`<p class="section-note">${channels.length} каналів · деякі потоки можуть бути недоступні у Safari</p>
     ${channels.length?`<div class="channel-grid">${channels.map(c=>{
-      const index=channels.indexOf(c);const logo=externalImageUrl(c.logo);
-      return `<div class="channel-entry"><button type="button" class="channel-card" data-channel="${index}">${logo?`<img class="channel-logo" src="${safe(logo)}" loading="lazy" alt="">`:`<div class="channel-logo" style="display:grid;place-items:center;background:#303140;color:#d7c6ff">${icon('live')}</div>`}<div style="min-width:0;flex:1"><div class="channel-name">${safe(c.name)}</div><div class="channel-group">${safe(c.group||'Прямий ефір')}</div></div>${icon('play')}</button><button class="btn secondary" data-channel-favorite="${index}" aria-label="Вибране IPTV">${state.iptvFavorites[c.url]?'★':'☆'}</button></div>`;
+      const index=channels.indexOf(c);const logo=externalImageUrl(c.logo);const saved=!!state.iptvFavorites[c.url];
+      return `<div class="channel-entry"><button type="button" class="channel-card" data-channel="${index}">${logo?`<img class="channel-logo" src="${safe(logo)}" loading="lazy" alt="">`:`<div class="channel-logo" style="display:grid;place-items:center;background:#303140;color:#d7c6ff">${icon('live')}</div>`}<div style="min-width:0;flex:1"><div class="channel-name">${safe(c.name)}</div><div class="channel-group">${safe(c.group||'Прямий ефір')}</div></div></button><button type="button" class="channel-star" data-channel-favorite="${index}" aria-pressed="${saved}" aria-label="${safe((saved?'Прибрати з вибраного: ':'Додати у вибране: ')+c.name)}" title="${saved?'Прибрати з вибраного':'Додати у вибране'}"><svg viewBox="0 0 24 24" fill="${saved?'currentColor':'none'}" aria-hidden="true"><path d="m12 3 2.8 5.7 6.3.9-4.55 4.45 1.08 6.28L12 17.36l-5.63 2.97 1.08-6.28L2.9 9.6l6.3-.9L12 3Z"/></svg></button></div>`;
     }).join('')}</div>`:'<div class="empty">За вашим запитом каналів не знайдено.</div>'}`;
 }
 async function renderSettings() {
@@ -435,7 +437,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.27 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.28 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {
@@ -807,8 +809,8 @@ document.addEventListener('click',async event=>{
   if(action.dataset.seek){setPlayerControls(true,3000);const v=$('#video');if(v&&Number.isFinite(v.duration))v.currentTime=Math.min(v.duration,Math.max(0,v.currentTime+Number(action.dataset.seek)));return;}
   if(action.hasAttribute('data-fullscreen')){const v=$('#video');if(v){if(typeof v.webkitEnterFullscreen==='function')v.webkitEnterFullscreen();else if(v.requestFullscreen)v.requestFullscreen().catch(()=>{});}return;}
   if(action.dataset.player){const key=action.dataset.player;const item=state.lists[key]||state.activeItem;if(item)openPlayer(item);return;}
-  if(action.dataset.channelFavorite!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channelFavorite)];if(c){if(state.iptvFavorites[c.url])delete state.iptvFavorites[c.url];else state.iptvFavorites[c.url]=c;save();paintChannels();}return;}
-  if(action.hasAttribute('data-iptv-favorites')){state.iptvOnlyFavorites=!state.iptvOnlyFavorites;state.iptvGroup='';action.textContent=state.iptvOnlyFavorites?'Усі канали':'★ Вибране';paintChannels();return;}
+  if(action.dataset.channelFavorite!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channelFavorite)];if(c){if(state.iptvFavorites[c.url])delete state.iptvFavorites[c.url];else state.iptvFavorites[c.url]=c;save();if(state.iptvOnlyFavorites)paintChannels();else{const saved=!!state.iptvFavorites[c.url];const label=saved?'Прибрати з вибраного':'Додати у вибране';action.setAttribute('aria-pressed',String(saved));action.setAttribute('aria-label',label+': '+c.name);action.title=label;action.querySelector('svg')?.setAttribute('fill',saved?'currentColor':'none');}}return;}
+  if(action.hasAttribute('data-iptv-favorites')){state.iptvOnlyFavorites=!state.iptvOnlyFavorites;state.iptvGroup='';action.textContent=state.iptvOnlyFavorites?'Усі канали':'☆ Вибране';action.setAttribute('aria-pressed',String(state.iptvOnlyFavorites));paintChannels();return;}
   if(action.dataset.channel!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channel)];if(c)openPlayer({id:Number(action.dataset.channel),type:'iptv',title:c.name},c.url);return;}
   if(action.hasAttribute('data-wallpapers')){openWallpapers();return;}
   if(action.dataset.setWallpaper){state.wallpaper=action.dataset.setWallpaper;save();applyWallpaper();closeModal();toast('Шпалери застосовано');return;}
@@ -819,6 +821,44 @@ document.addEventListener('click',async event=>{
   if(action.hasAttribute('data-refresh-iptv')){renderIptv();return;}
   if(action.hasAttribute('data-clear-local')){if(confirm('Видалити все вибране, збережені потоки та прогрес перегляду?')){state.favorites={};state.progress={};state.sources={};state.history={};state.episodeProgress={};state.lastEpisode={};save();renderSettings();toast('Локальні дані очищено');}return;}
 });
+// Desktop home: fit whole posters to the visible rail, and map wheel to card scrolling.
+let observedHomeRail=null,homeRailObserver=null,wheelRail=null,wheelTarget=0,wheelTime=0,wheelDelta=0;
+function fitHomeRail(){
+  const rail=observedHomeRail;
+  if(!rail?.isConnected||!matchMedia('(min-width:761px)').matches){rail?.style.removeProperty('--rail-card-width');return;}
+  const css=getComputedStyle(rail),gap=parseFloat(css.columnGap)||0;
+  const width=rail.clientWidth-(parseFloat(css.paddingLeft)||0)-(parseFloat(css.paddingRight)||0);
+  const height=rail.clientHeight-(parseFloat(css.paddingTop)||0)-(parseFloat(css.paddingBottom)||0);
+  if(width<=0||height<=0)return;
+  const {cardWidth}=homeRailMetrics(width,height,gap);
+  rail.style.setProperty('--rail-card-width',cardWidth+'px');
+}
+function observeHomeRail(){
+  homeRailObserver?.disconnect();observedHomeRail=$('#home-rail');wheelRail=null;
+  if(!observedHomeRail)return;
+  fitHomeRail();
+  if(typeof ResizeObserver==='function'){homeRailObserver=new ResizeObserver(fitHomeRail);homeRailObserver.observe(observedHomeRail);}
+}
+window.addEventListener('resize',fitHomeRail,{passive:true});
+document.addEventListener('wheel',event=>{
+  if(state.view!=='home'||modal.innerHTML||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
+  const rail=$('#home-rail');
+  if(!rail||rail.scrollWidth<=rail.clientWidth||Math.abs(event.deltaX)>=Math.abs(event.deltaY)||!event.deltaY)return;
+  const first=rail.querySelector('.poster-card');if(!first)return;
+  event.preventDefault();
+  const pitch=first.getBoundingClientRect().width+(parseFloat(getComputedStyle(rail).columnGap)||0);
+  if(pitch<=0)return;
+  const now=performance.now();
+  if(wheelRail!==rail||now-wheelTime>260){wheelTarget=Math.round(rail.scrollLeft/pitch);wheelDelta=0;}
+  wheelRail=rail;wheelTime=now;
+  const delta=event.deltaY*(event.deltaMode===1?18:event.deltaMode===2?120:1);
+  if(Math.sign(delta)!==Math.sign(wheelDelta))wheelDelta=0;
+  wheelDelta+=delta;
+  if(Math.abs(wheelDelta)<36)return;
+  const maxIndex=Math.ceil((rail.scrollWidth-rail.clientWidth)/pitch);
+  wheelTarget=wheelCardIndex(wheelTarget,wheelDelta,maxIndex);wheelDelta=0;
+  rail.scrollTo({left:Math.min(rail.scrollWidth-rail.clientWidth,wheelTarget*pitch),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+},{passive:false});
 document.addEventListener('pointerover',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
 document.addEventListener('focusin',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
 let swipeY=0,swipeX=0;document.addEventListener('touchstart',event=>{if(event.target.closest('#home-rail')){swipeY=event.touches[0].clientY;swipeX=event.touches[0].clientX;}else swipeY=0;},{passive:true});
