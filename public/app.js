@@ -526,7 +526,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.35 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.36 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -718,10 +718,21 @@ function setPlayerControls(visible, hideAfter=0) {
   if(!frame)return;
   clearTimeout(state.playerControlsTimer);
   frame.classList.toggle('controls-hidden', !visible);
-  if(visible && hideAfter)state.playerControlsTimer=setTimeout(()=>{
-    if($('#video') && !$('#video').paused)frame.classList.add('controls-hidden');
+  if(visible && hideAfter&&!playerSettingsOpen())state.playerControlsTimer=setTimeout(()=>{
+    if($('#video') && !$('#video').paused&&!playerSettingsOpen())frame.classList.add('controls-hidden');
   },hideAfter);
 }
+function playerSettingsOpen(){const panel=$('#player-settings');return !!panel&&!panel.hidden;}
+function togglePlayerSettings(open){
+  const panel=$('#player-settings'),button=$('[data-player-settings]');
+  if(!panel||!button)return;
+  const visible=open??panel.hidden;
+  panel.hidden=!visible;button.setAttribute('aria-expanded',String(visible));
+  setPlayerControls(true,visible?0:3000);
+  if(visible)panel.querySelector('[data-close-player-settings]')?.focus({preventScroll:true});
+  else button.focus({preventScroll:true});
+}
+const transportPlayIcon=paused=>paused?'<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><path d="M8 4.5 20 12 8 19.5Z"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
 function cleanupPlayer() {
   clearTimeout(state.playerControlsTimer);
   if(state.hls){state.hls.destroy();state.hls=null;}
@@ -740,9 +751,13 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
     <div class="player-top"><h2>${safe(item.title)}</h2><button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button></div>
     <div class="player-frame"><video id="video" playsinline webkit-playsinline preload="metadata" tabindex="0" aria-label="Відео: дотик або клік — показати чи сховати керування" poster="${safe(imageUrl(item.backdrop,'w1280'))}"></video>
       <div class="switch-player-panel" id="switch-player-panel"><div class="switch-player-seek"><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
-      <div class="switch-player-actions"><button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд">↶</button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Плей/пауза">▶</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд">↷</button></div><button type="button" class="switch-fullscreen" data-fullscreen>⛶ Повний екран</button></div></div>
+      <div class="switch-player-bottom">
+        <label class="switch-volume" title="Гучність"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M16 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/></svg><input type="range" id="player-volume" min="0" max="1" step="0.01" value="${state.playerVolume}" aria-label="Гучність" style="--volume-fill:${state.playerVolume*100}%"></label>
+        <div class="switch-player-actions"><button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд" title="Назад 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15.5 5-7 7 7 7"/></svg></button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Відтворити">${transportPlayIcon(true)}</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд" title="Вперед 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8.5 5 7 7-7 7"/></svg></button></div>
+        <div class="switch-player-tools"><button type="button" class="switch-player-tool" data-player-settings aria-controls="player-settings" aria-expanded="false" aria-label="Налаштування плеєра" title="Налаштування">${icon('settings')}</button><button type="button" class="switch-fullscreen switch-player-tool" data-fullscreen aria-label="Повний екран" title="Повний екран"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
+      </div></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
-    <div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Гучність <input type="range" id="player-volume" min="0" max="1" step="0.05" value="${state.playerVolume}"></label><label>Яскравість відео <input type="range" id="player-brightness" min="0.4" max="1.4" step="0.05" value="1"></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div>
+    <section id="player-settings" class="player-settings-menu" role="region" aria-label="Налаштування плеєра" hidden><div class="player-settings-heading"><h3>Налаштування</h3><button type="button" class="player-settings-close" data-close-player-settings aria-label="Закрити налаштування">${icon('close')}</button></div><div class="player-form player-options"><label>Швидкість <select id="player-rate">${[0.5,0.75,1,1.25,1.5,2].map(v=>`<option value="${v}" ${v===state.playerRate?'selected':''}>${v}×</option>`).join('')}</select></label><label>Якість <select id="player-quality"><option value="-1">Авто</option></select></label>${voiceGroup?.rows.length>1?`<label>Озвучення <select id="player-voice">${voiceGroup.rows.map((v,i)=>`<option value="${i}" ${i===voiceGroup.index?'selected':''}>${safe(v.label)}</option>`).join('')}</select></label>`:''}<label>Аудіо <select id="player-audio"><option value="-1">За замовчуванням</option></select></label><label>Субтитри <select id="player-track"><option value="-1">Вимкнено</option></select></label><label>Файл субтитрів <input id="local-subtitle" type="file" accept=".vtt,.srt"></label><label>Розмір субтитрів <select id="subtitle-size"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label>${['movie','tv'].includes(item.type)?'<button type="button" class="btn secondary" data-subtitles>Шукати субтитри SubDL</button>':''}<div id="subtitle-results"></div>${item.type==='tv'?'<button class="btn secondary" data-episode-step="-1">Попередня серія</button><button class="btn secondary" data-episode-step="1">Наступна серія</button>':''}</div></section>
     <div class="player-help" id="player-help">${presetUrl?'Потік з джерела. Натисніть ▶, якщо Safari не дозволив автоматичний запуск.':'Введіть пряме HTTPS-посилання MP4 / HLS.'}</div>
     </section></div>`;
   const video=$('#video');
@@ -751,7 +766,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
     const seek=$('#video-seek');if(seek){seek.max=String(Number.isFinite(video.duration)?video.duration:100);seek.value=String(Math.min(video.currentTime||0,Number(seek.max)));seek.disabled=!Number.isFinite(video.duration);}
     const elapsed=$('#time-elapsed');if(elapsed)elapsed.textContent=timeLabel(video.currentTime);
     const total=$('#time-total');if(total)total.textContent=timeLabel(video.duration);
-    const toggle=$('[data-toggle-play]');if(toggle)toggle.textContent=video.paused?'▶':'Ⅱ';
+    const toggle=$('[data-toggle-play]');if(toggle&&toggle.dataset.paused!==String(video.paused)){toggle.dataset.paused=String(video.paused);toggle.innerHTML=transportPlayIcon(video.paused);toggle.setAttribute('aria-label',video.paused?'Відтворити':'Пауза');}
   }
   video.playbackRate=state.playerRate;try{video.volume=state.playerVolume;}catch{}
   video.addEventListener('loadedmetadata',()=>{updateTransport();refreshMediaOptions();});
@@ -759,6 +774,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
   video.addEventListener('play',async()=>{updateTransport();setPlayerControls(true,3000);try{const lock=await navigator.wakeLock?.request('screen');if(lock){if($('#video')===video&&!video.paused)state.wakeLock=lock;else lock.release().catch(()=>{});}}catch{}});
   video.addEventListener('pause',()=>{updateTransport();setPlayerControls(true);});
   video.addEventListener('click',()=>{
+    if(playerSettingsOpen()){togglePlayerSettings(false);return;}
     const hidden=video.closest('.player-frame')?.classList.contains('controls-hidden');
     setPlayerControls(Boolean(hidden),hidden?3000:0);
   });
@@ -907,6 +923,8 @@ document.addEventListener('click',async event=>{
   if(action.hasAttribute('data-voice-group')){const group=state.groupedVoices,item=state.activeItem;if(item&&group&&group.source===state.activeSource&&group.season===state.selectedSeason&&group.episode===state.selectedEpisode){const prefKey=keyFor(item)+':'+group.source.provider;const index=preferredVoiceIndex(group.rows,state.voicePreferences[prefKey]);openPlayer(item,group.rows[index].url,null,{rows:group.rows,index,prefKey});}return;}
   if(action.dataset.streamUrl){if(state.activeItem)openPlayer(state.activeItem,action.dataset.streamUrl);return;}
   if(action.dataset.episode){state.selectedEpisode=Number(action.dataset.episode)||1;showSources(state.activeItem);return;}
+  if(action.hasAttribute('data-player-settings')){togglePlayerSettings();return;}
+  if(action.hasAttribute('data-close-player-settings')){togglePlayerSettings(false);return;}
   if(action.hasAttribute('data-toggle-play')){setPlayerControls(true,3000);const v=$('#video');if(v){if(v.paused)v.play().catch(()=>toast('Не вдалося запустити відео'));else v.pause();}return;}
   if(action.dataset.seek){setPlayerControls(true,3000);const v=$('#video');if(v&&Number.isFinite(v.duration))v.currentTime=Math.min(v.duration,Math.max(0,v.currentTime+Number(action.dataset.seek)));return;}
   if(action.hasAttribute('data-fullscreen')){const v=$('#video');if(v){if(typeof v.webkitEnterFullscreen==='function')v.webkitEnterFullscreen();else if(v.requestFullscreen)v.requestFullscreen().catch(()=>{});}return;}
@@ -970,6 +988,7 @@ function updateClock(){const clock=$('#header-clock');if(clock)clock.textContent
 document.addEventListener('input',event=>{
   if(event.target.id==='search-input'){state.searchQuery=event.target.value;clearTimeout(state.searchTimer);state.searchTimer=setTimeout(performSearch,320);}
   if(event.target.id==='channel-search'){state.channelQuery=event.target.value;paintChannels();}
+  if(event.target.id==='player-volume'){const v=$('#video');if(v){state.playerVolume=Number(event.target.value);event.target.style.setProperty('--volume-fill',state.playerVolume*100+'%');try{v.volume=state.playerVolume;}catch{}setPlayerControls(true);}}
 });
 document.addEventListener('change',event=>{
   const el=event.target,v=$('#video');
@@ -978,8 +997,7 @@ document.addEventListener('change',event=>{
   if(el.id==='offline-import')importOffline(el.files?.[0]);
   if(el.id==='player-voice'&&v)switchPlayerVoice(Number(el.value));
   if(el.id==='player-rate'&&v){state.playerRate=Number(el.value);v.playbackRate=state.playerRate;}
-  if(el.id==='player-volume'&&v){state.playerVolume=Number(el.value);try{v.volume=state.playerVolume;if(Math.abs(v.volume-state.playerVolume)>0.01)toast('На iPhone використовуйте системні кнопки гучності');}catch{}}
-  if(el.id==='player-brightness'&&v)v.style.filter='brightness('+Number(el.value)+')';
+  if(el.id==='player-volume'&&v){state.playerVolume=Number(el.value);try{v.volume=state.playerVolume;if(Math.abs(v.volume-state.playerVolume)>0.01)toast('На iPhone використовуйте системні кнопки гучності');}catch{}setPlayerControls(true,3000);}
   if(el.id==='player-quality'&&state.hls)state.hls.currentLevel=Number(el.value);
   if(el.id==='player-audio'&&v){const n=Number(el.value);if(n>=0){if(state.hls)state.hls.audioTrack=n;else Array.from(v.audioTracks||[]).forEach((t,i)=>{t.enabled=i===n;});}}
   if(el.id==='local-subtitle')addLocalSubtitle(el.files?.[0]);
@@ -995,6 +1013,7 @@ document.addEventListener('submit',event=>{
   if(event.target.id==='wallpaper-form'){event.preventDefault();loadWallpapers($('#wallpaper-query')?.value||'');}
 });
 document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&playerSettingsOpen()){event.preventDefault();togglePlayerSettings(false);return;}
   if(event.key==='Escape' && modal.innerHTML){event.preventDefault();closeModal();return;}
   if(event.key==='Escape'&&isUtilityView(state.view)){event.preventDefault();closeUtilityView();return;}
   if(event.altKey||event.ctrlKey||event.metaKey)return;
