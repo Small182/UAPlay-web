@@ -390,3 +390,5 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
   html[data-device=phone] .toast{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));transform:translateY(80px);text-align:center}
   html[data-device=phone] .toast.show{transform:translateY(0)}
 }
+
+.about-web-qr{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin:16px 0}.about-web-qr>a{flex:0 0 auto;display:block}.about-web-qr img{width:148px;height:148px;background:#fff;border-radius:8px;image-rendering:pixelated}.about-web-qr>div{flex:1 1 160px;min-width:0}.about-web-qr p{margin:5px 0 0}
