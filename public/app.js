@@ -78,14 +78,28 @@ async function openWallpapers(){
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal source-modal" role="dialog" aria-modal="true" aria-label="Шпалери UAPlay"><button class="close-modal" data-close aria-label="Закрити">${icon('close')}</button><h2>Шпалери</h2><p class="section-note">Галерея Wallhaven · Безпечний пошук. Зображення не зберігаються на нашому сервері.</p><form id="wallpaper-form" class="player-form"><input id="wallpaper-query" class="input-line" placeholder="Пошук шпалер" maxlength="70"><button class="btn primary" type="submit">Шукати</button></form><div id="wallpaper-results">Завантаження…</div><button class="btn secondary" data-wallpaper-reset>Стандартний фон</button></section></div>`;
   loadWallpapers('');
 }
+const wallpaperBrowserCache=new Map();
+let wallpaperRequest=0,wallpaperRetryAt=0;
 async function loadWallpapers(query){
   const el=$('#wallpaper-results');if(!el)return;
-  el.textContent='Завантаження шпалер…';
+  query=query.trim();const seq=++wallpaperRequest;
+  const submit=$('#wallpaper-form button[type=submit]');
+  const key='uaplay-wallpapers-v1:'+query;
+  let saved=wallpaperBrowserCache.get(key);try{saved=saved||JSON.parse(localStorage.getItem(key)||'null');}catch{}
+  if(saved&&Date.now()-saved.time>7*86400000)saved=null;
+  const render=(rows,notice='')=>{if(!el.isConnected||seq!==wallpaperRequest)return;el.innerHTML=`${notice?`<p class="section-note">${safe(notice)}</p>`:''}${rows.length?`<div class="wallpaper-grid">${rows.map(w=>`<button class="wallpaper-pick" type="button" data-set-wallpaper="${safe(w.image)}"><img src="${safe(externalImageUrl(w.thumb))}" alt="Шпалери ${safe(w.id)}" loading="lazy"><span>${safe(w.resolution)}</span></button>`).join('')}</div>`:'<p class="section-note">Немає доступних шпалер для цього запиту.</p>'}`;};
+  if(saved&&Date.now()-saved.time<30*60000){render(saved.rows);return;}
+  if(Date.now()<wallpaperRetryAt){render(saved?.rows||[],'Wallhaven тимчасово обмежив запити. Повторіть пошук пізніше.');return;}
+  if(saved)render(saved.rows,'Оновлюємо галерею…');else el.textContent='Завантаження шпалер…';
+  if(submit)submit.disabled=true;
   try{
     const data=await api(`/api/wallpapers?q=${encodeURIComponent(query)}`);
-    if(!$('#wallpaper-results'))return;
-    el.innerHTML=`<div class="wallpaper-grid">${data.wallpapers.map(w=>`<button class="wallpaper-pick" type="button" data-set-wallpaper="${safe(w.image)}"><img src="${safe(externalImageUrl(w.thumb))}" alt="Шпалери ${safe(w.id)}" loading="lazy"><span>${safe(w.resolution)}</span></button>`).join('')}</div>`;
-  }catch(e){el.innerHTML=`<p class="section-note">${safe(e.message)}</p>`;}
+    if(data.rateLimited)wallpaperRetryAt=Date.now()+Math.max(60,Number(data.retryAfter)||120)*1000;
+    const rows=Array.isArray(data.wallpapers)?data.wallpapers:[];
+    if(!data.stale&&!data.rateLimited){const value={time:Date.now(),rows};wallpaperBrowserCache.set(key,value);try{localStorage.setItem(key,JSON.stringify(value));}catch{}}
+    render(rows.length?rows:saved?.rows||[],data.notice||'');
+  }catch(e){render(saved?.rows||[],e.message);}
+  finally{if(submit&&seq===wallpaperRequest)submit.disabled=false;}
 }
 async function findSubtitles(){
   const item=state.activePlayer?.item;
@@ -437,7 +451,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.28 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.29 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 async function showView(view) {

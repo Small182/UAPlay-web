@@ -207,14 +207,64 @@ async function providerMedia(params) {
   const data=await resolveProviderMedia(provider,id);
   return js({...data,notice:(data.streams.length||data.playerEmbeds?.length)?'Відтворення залежить від доступності потоку та обмежень Safari.':'Сторінка джерела не містить відкритого MP4/HLS. Перевірте відео на сайті джерела.'},200,0);
 }
-async function wallpapers(params){
+// Wallhaven cache: one upstream request per query at a time, stale-on-error,
+ // and a shared cooldown when the upstream explicitly rate-limits requests.
+const wallpaperMemo=new Map(),wallpaperPending=new Map();
+let wallpaperCooldown=0;
+const WALLPAPER_FRESH=30*60*1000,WALLPAPER_STALE=7*24*60*60*1000;
+function wallpaperRetryAfter(value,now=Date.now()){
+  const seconds=Number(value);
+  const delay=value&&Number.isFinite(seconds)?seconds*1000:Date.parse(value||'')-now;
+  return Math.min(24*60*60*1000,Math.max(60*1000,Number.isFinite(delay)?delay:120000));
+}
+async function wallpapers(params,env={},request){
   const query=clean(params.get('q'),70);
-  const page=Math.max(1,Math.min(30,Number(params.get('page'))||1));
-  const url=new URL('https://wallhaven.cc/api/v1/search');
-  url.searchParams.set('purity','100');url.searchParams.set('categories','100');url.searchParams.set('atleast','1280x720');url.searchParams.set('page',String(page));
-  if(query)url.searchParams.set('q',query);
-  const data=JSON.parse(await upstream(url.toString()));
-  return js({page,wallpapers:(data.data||[]).slice(0,24).map(p=>({id:clean(p.id,20),thumb:p.thumbs?.large||null,image:p.path||null,resolution:p.resolution||''})).filter(p=>p.image?.startsWith('https://'))},200,300);
+  const page=Math.max(1,Math.min(30,Math.trunc(Number(params.get('page'))||1)));
+  const key=JSON.stringify([query,page]);
+  const origin=new URL(request?.url||'https://uaplay-web.pages.dev').origin;
+  const cache=globalThis.caches?.default;
+  const cacheKey=new Request(origin+'/_internal-wallpaper-cache/v2?q='+encodeURIComponent(query)+'&page='+page);
+  const cooldownKey=new Request(origin+'/_internal-wallpaper-cache/v2/cooldown');
+  async function cacheRead(k){try{const r=await cache?.match(k);return r?await r.json():null;}catch{return null;}}
+  async function cacheWrite(k,value,ttl){try{await cache?.put(k,new Response(JSON.stringify(value),{headers:{'content-type':'application/json','cache-control':'public, max-age='+ttl}}));}catch{}}
+  let entry=wallpaperMemo.get(key)||await cacheRead(cacheKey);
+  const now=Date.now();
+  if(entry&&now-entry.savedAt>WALLPAPER_STALE)entry=null;
+  if(entry&&now-entry.savedAt<WALLPAPER_FRESH)return js({...entry.data,cached:true},200,300);
+  if(wallpaperPending.has(key))return js(await wallpaperPending.get(key),200,0);
+  const task=(async()=>{
+    const cooldown=await cacheRead(cooldownKey);
+    const until=Math.max(wallpaperCooldown,cooldown?.until||0);
+    const limited=(retryAt)=>({...entry?.data,page,wallpapers:entry?.data?.wallpapers||[],stale:!!entry,rateLimited:true,retryAfter:Math.max(1,Math.ceil((retryAt-Date.now())/1000)),notice:'Wallhaven тимчасово обмежив запити. Повторіть пошук пізніше.'});
+    if(until>Date.now())return limited(until);
+    const url=new URL('https://wallhaven.cc/api/v1/search');
+    url.searchParams.set('purity','100');url.searchParams.set('categories','100');url.searchParams.set('atleast','1280x720');url.searchParams.set('page',String(page));url.searchParams.set('sorting','toplist');url.searchParams.set('topRange','1M');
+    if(query){url.searchParams.set('q',query);url.searchParams.set('sorting','relevance');}
+    const headers={accept:'application/json','user-agent':'UAPlay-Web/0.5.29'};
+    if(env.WALLHAVEN_API_KEY)headers['X-API-Key']=env.WALLHAVEN_API_KEY;
+    try{
+      const response=await fetch(url.href,{headers,redirect:'manual',signal:AbortSignal.timeout(9000)});
+      if(response.status===429){
+        wallpaperCooldown=Date.now()+wallpaperRetryAfter(response.headers.get('retry-after'));
+        await cacheWrite(cooldownKey,{until:wallpaperCooldown},Math.ceil((wallpaperCooldown-Date.now())/1000)+1);
+        return limited(wallpaperCooldown);
+      }
+      if(!response.ok)throw new Error('Wallhaven повернув HTTP '+response.status);
+      const payload=await response.json();
+      if(!Array.isArray(payload.data))throw new Error('Некоректна відповідь Wallhaven');
+      const data={page,wallpapers:payload.data.slice(0,24).map(p=>({id:clean(p.id,20),thumb:p.thumbs?.large||null,image:p.path||null,resolution:p.resolution||''})).filter(p=>p.image?.startsWith('https://w.wallhaven.cc/'))};
+      const saved={savedAt:Date.now(),data};
+      wallpaperMemo.set(key,saved);
+      if(wallpaperMemo.size>80)wallpaperMemo.delete(wallpaperMemo.keys().next().value);
+      await cacheWrite(cacheKey,saved,WALLPAPER_STALE/1000);
+      return data;
+    }catch(e){
+      if(entry)return {...entry.data,stale:true,notice:'Wallhaven недоступний. Показано збережені результати.'};
+      throw e;
+    }
+  })();
+  wallpaperPending.set(key,task);
+  try{return js(await task,200,0);}finally{wallpaperPending.delete(key);}
 }
 async function subtitles(params,env){
   if(!env.SUBDL_TOKEN)return err('Для пошуку субтитрів додайте SUBDL_TOKEN у Cloudflare Secrets',503);
@@ -262,7 +312,7 @@ export async function handleIntegration(request,env){
     if(path==='/api/providers')return js({providers:Object.entries(PROVIDERS).map(([id,p])=>({id,name:p.name,search:true,autoStream:['mikai','animeon'].includes(id)})),unsupported:['Movy — використовує локальний проксі та логіку нативного плеєра']},200,600);
     if(path==='/api/providers/search')return await providerSearch(url.searchParams);
     if(path==='/api/providers/media')return await providerMedia(url.searchParams);
-    if(path==='/api/wallpapers')return await wallpapers(url.searchParams);
+    if(path==='/api/wallpapers')return await wallpapers(url.searchParams,env,request);
     if(path==='/api/subtitles')return await subtitles(url.searchParams,env);
     return await releases();
   }catch(e){return js({error:e?.message||'Зовнішнє джерело недоступне',upstreamStatus:e?.upstreamStatus||0},e?.status||503);}

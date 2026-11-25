@@ -182,3 +182,24 @@ test('UASerials movies still respect release years in the URL',async()=>{
   assert.deepEqual((await reply.json()).results.map(x=>x.id),['https://uaserials.my/1-example-1999.html']);
  });
 });
+
+test('Wallhaven caches successful repeated queries and observes upstream cooldown',async()=>{
+ let calls=0;
+ await withMockFetch(async(url,options)=>{
+  calls++;
+  assert.equal(options.headers['X-API-Key'],'test-secret');
+  const q=new URL(url).searchParams.get('q');
+  if(q==='rate-limit-test')return new Response('',{status:429,headers:{'retry-after':'180'}});
+  return new Response(JSON.stringify({data:[{id:'wall1',path:'https://w.wallhaven.cc/full/test.jpg',thumbs:{large:'https://th.wallhaven.cc/test.jpg'}}]}));
+ },async()=>{
+  const run=q=>handleIntegration(req('/api/wallpapers?q='+q),{WALLHAVEN_API_KEY:'test-secret'}).then(r=>r.json());
+  assert.equal((await run('cache-test')).wallpapers.length,1);
+  assert.equal((await run('cache-test')).cached,true);
+  assert.equal(calls,1);
+  const limited=await run('rate-limit-test');
+  assert.equal(limited.rateLimited,true);assert.ok(limited.retryAfter>=179);
+  assert.equal((await run('another-test')).rateLimited,true);
+  assert.equal(calls,2);
+  assert.equal((await run('cache-test')).wallpapers.length,1);
+ });
+});
