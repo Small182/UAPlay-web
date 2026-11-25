@@ -40,6 +40,19 @@ function allowed(m) {
   const countries = m.origin_country || (m.production_countries || []).map(c => c.iso_3166_1) || [];
   return m.original_language !== 'ru' && !countries.includes('RU');
 }
+// TMDB supplies calendar dates rather than exact local premiere times.
+function releaseCutoff(now=new Date()){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const get=kind=>parts.find(p=>p.type===kind).value;
+  return get('year')+'-'+get('month')+'-'+get('day');
+}
+function hasPremiered(m,cutoff,type=m.media_type||(m.first_air_date!==undefined?'tv':'movie')){
+  const date=type==='tv'?m.first_air_date:m.release_date;
+  // Unknown or invalid dates cannot establish that a title has premiered.
+  if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>cutoff)return false;
+  const parsed=new Date(date+'T00:00:00Z');
+  return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===date&&date>='0001-01-01';
+}
 // Both the original Switch v3 API key and a v4 read-access token are accepted.
 // Credentials stay server-side in Cloudflare secrets; never expose them in pages.
 function tmdbCredentials(env) {
@@ -87,16 +100,22 @@ async function catalogue(params, env) {
   const sort=params.get('sort')||'popularity';
   const sorting={newest:'desc',oldest:'asc'};
   if(path.startsWith('/discover/')){if(sorting[sort])opts={...opts,sort_by:(path.endsWith('/tv')?'first_air_date':'primary_release_date')+'.'+sorting[sort]};else if(sort==='rating')opts={...opts,sort_by:'vote_average.desc','vote_count.gte':50};}
-  const data = await tmdbRequest(path, { ...opts, page: p }, env);
+  const cutoff=releaseCutoff();
   const forced = path.includes('/tv') ? 'tv' : path.includes('/movie') ? 'movie' : undefined;
-  return json({ results: (data.results || []).filter(m => m.media_type !== 'person' && allowed(m)).map(m => item(m, forced)), page: p, totalPages: Math.min(500, data.total_pages || 1) }, 200, 120);
+  if(path.startsWith('/discover/')){
+    opts={...opts,[forced==='tv'?'first_air_date.lte':'primary_release_date.lte']:cutoff};
+    if(forced==='tv')opts.include_null_first_air_dates='false';
+  }
+  const data = await tmdbRequest(path, { ...opts, page: p }, env);
+  return json({ results: (data.results || []).filter(m => m.media_type !== 'person' && allowed(m) && hasPremiered(m,cutoff,forced)).map(m => item(m, forced)), page: p, totalPages: Math.min(500, data.total_pages || 1) }, 200, 120);
 }
 async function search(params, env) {
   const query = text(params.get('q'), 90);
   if (query.length < 2) return error('Введіть мінімум два символи');
   const p = pageNumber(params.get('page'));
   const data = await tmdbRequest('/search/multi', { query, page: p, include_adult: 'false' }, env);
-  return json({ results: (data.results || []).filter(m => ['tv', 'movie'].includes(m.media_type) && allowed(m)).map(m => item(m)), page: p, totalPages: Math.min(500, data.total_pages || 1) }, 200, 60);
+  const cutoff=releaseCutoff();
+  return json({ results: (data.results || []).filter(m => ['tv', 'movie'].includes(m.media_type) && allowed(m) && hasPremiered(m,cutoff)).map(m => item(m)), page: p, totalPages: Math.min(500, data.total_pages || 1) }, 200, 60);
 }
 async function details(type, id, env) {
   if (!['tv', 'movie'].includes(type) || !/^\d{1,12}$/.test(id)) return error('Некоректний ідентифікатор');

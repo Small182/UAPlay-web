@@ -520,7 +520,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.53 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.54 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -887,7 +887,12 @@ function closeModal(){wallpaperGallery?.observer?.disconnect();cleanupPlayer();m
 
 async function init() {
   applyAccent();buildNav();
-  try {state.demo=(await (await fetch('/data/demo.json')).json()).results || [];} catch {state.demo=[];}
+  try {
+    const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+    const get=k=>parts.find(p=>p.type===k).value;
+    const cutoff=get('year')+'-'+get('month')+'-'+get('day');
+    state.demo=((await (await fetch('/data/demo.json')).json()).results||[]).filter(i=>typeof i.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(i.date)&&i.date<=cutoff);
+  } catch {state.demo=[];}
   loadVisibleItems(state.demo);
   try {const health=await api('/api/health');state.tmdbConfigured=!!health.tmdbConfigured;state.demoMode=!health.tmdbConfigured;}catch{state.demoMode=true;}
   await showView('home');

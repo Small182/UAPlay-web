@@ -39,7 +39,7 @@ test('catalogue uses server-side TMDB token and normalizes public response', asy
     requestedUrl=String(url);
     auth=options.headers.Authorization;
     return new Response(JSON.stringify({results:[
-      {id:5,title:'Український фільм',poster_path:'/poster.jpg',release_date:'2026-02-01',original_language:'uk',vote_average:8.4},
+      {id:5,title:'Український фільм',poster_path:'/poster.jpg',release_date:'2020-02-01',original_language:'uk',vote_average:8.4},
       {id:6,title:'Приховано',original_language:'ru',vote_average:1}
     ],total_pages:1}), {status:200});
   };
@@ -64,7 +64,7 @@ test('Switch TMDB v3 API key works server-side without exposing it to the client
   globalThis.fetch=async (url, options) => {
     calledUrl=new URL(url);
     calledHeaders=options.headers;
-    return new Response(JSON.stringify({ results: [{id:42,title:'Кіно',original_language:'uk',vote_average:7.5}], total_pages:1 }), {status:200});
+    return new Response(JSON.stringify({ results: [{id:42,title:'Кіно',release_date:'2020-01-01',original_language:'uk',vote_average:7.5}], total_pages:1 }), {status:200});
   };
   try {
     const response=await handleApi(new Request('https://uaplay.test/api/catalog?section=movies'), {TMDB_API_KEY:key});
@@ -108,4 +108,53 @@ test('catalogue sort is translated to TMDB date order',async()=>{
   const old=globalThis.fetch;let requested;
   globalThis.fetch=async url=>{requested=new URL(url);return new Response(JSON.stringify({results:[],total_pages:1}));};
   try{const response=await handleApi(new Request('https://uaplay.test/api/catalog?section=series&sort=newest'),{TMDB_API_KEY:'0123456789abcdef0123456789abcdef'});assert.equal(response.status,200);assert.equal(requested.searchParams.get('sort_by'),'first_air_date.desc');}finally{globalThis.fetch=old;}
+});
+
+test('all discovery sorts send the proper premiere cutoff and exclude future or undated titles',async()=>{
+ const old=globalThis.fetch;
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const get=k=>parts.find(p=>p.type===k).value;
+ const today=get('year')+'-'+get('month')+'-'+get('day');
+ let requested;
+ globalThis.fetch=async url=>{
+  requested=new URL(url);
+  const tv=requested.pathname.endsWith('/tv');
+  const key=tv?'first_air_date':'release_date';
+  return new Response(JSON.stringify({results:[
+   {id:1,title:'Released',[key]:'2000-01-01'},
+   {id:2,title:'Future',[key]:'2999-01-01'},
+   {id:3,title:'Unknown',[key]:''},
+   {id:4,title:'Today',[key]:today},
+   {id:5,title:'Invalid',[key]:'2000-02-31'},
+   {id:6,title:'Other country',[key]:'2000-01-01',original_language:'ru'}
+  ],total_pages:3}));
+ };
+ try{
+  for(const section of ['movies','series','animation','cartoons','anime','genre_28']){
+   for(const sort of ['newest','oldest','rating','popularity']){
+    const response=await handleApi(new Request('https://uaplay.test/api/catalog?section='+section+'&sort='+sort),{TMDB_TOKEN:'test'});
+    assert.equal(response.status,200);
+    const tv=['series','cartoons','anime'].includes(section);
+    assert.equal(requested.searchParams.get(tv?'first_air_date.lte':'primary_release_date.lte'),today);
+    const data=await response.json();assert.deepEqual(data.results.map(x=>x.id),[1,4]);assert.equal(data.totalPages,3);
+   }
+  }
+ }finally{globalThis.fetch=old;}
+});
+test('trending, top rated and multi-search apply the same release date filter',async()=>{
+ const old=globalThis.fetch;
+ globalThis.fetch=async()=>new Response(JSON.stringify({results:[
+  {id:1,media_type:'movie',title:'Released',release_date:'2000-01-01'},
+  {id:2,media_type:'movie',title:'Future',release_date:'2999-01-01'},
+  {id:3,media_type:'tv',name:'Running',first_air_date:'2000-01-01'},
+  {id:4,media_type:'tv',name:'Future show',first_air_date:'2999-01-01'},
+  {id:5,media_type:'person',name:'Person'},
+  {id:6,media_type:'movie',title:'Unknown'}
+ ],total_pages:1}));
+ try{
+  for(const [path,expected] of [['/api/catalog?section=trending',[1,3]],['/api/catalog?section=top',[1]],['/api/search?q=Test',[1,3]]]){
+   const r=await handleApi(new Request('https://uaplay.test'+path),{TMDB_TOKEN:'test'});
+   assert.equal(r.status,200);assert.deepEqual((await r.json()).results.map(x=>x.id),expected);
+  }
+ }finally{globalThis.fetch=old;}
 });
