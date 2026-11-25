@@ -298,8 +298,8 @@ html[data-view=home] #home-rail{overflow-x:auto!important;overflow-y:hidden!impo
 @media(max-width:340px){.series-transport .switch-transport{width:40px;height:40px}.series-transport .switch-transport.switch-play{width:54px;height:54px}}
 
 /* Align trailing navigation arrows geometrically and close all Switch-style dialogs. */
-.switch-row .row-chevron{display:grid;place-items:center;align-self:center;flex:0 0 24px;width:24px;height:24px;line-height:0;margin-left:auto}
-.switch-row .row-chevron svg{display:block;width:20px;height:20px;stroke-width:2.4;flex-shrink:0}
+:is(.switch-row,.episode) .row-chevron{display:grid;place-items:center;align-self:center;flex:0 0 24px;width:24px;height:24px;line-height:0;margin-left:auto}
+:is(.switch-row,.episode) .row-chevron svg{display:block;width:20px;height:20px;stroke-width:2.4;flex-shrink:0}
 .switch-screen-header h1{min-width:0;overflow-wrap:anywhere}
 .switch-screen-header .switch-screen-close{margin-left:auto;flex:0 0 44px;width:44px;height:44px;display:grid;place-items:center;align-self:center;border:0;border-radius:12px;background:var(--panel2);color:var(--text);padding:0}
 .switch-screen-header>span+.switch-screen-close{margin-left:0}
