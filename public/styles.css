@@ -605,12 +605,12 @@ html[data-tablet=true] .poster-grid{
 html[data-tablet=true] .poster-grid .poster-card{width:100%;max-width:180px;min-width:0;justify-self:start}
 html[data-tablet=true] .poster-grid .poster-cover{width:100%;height:auto;aspect-ratio:2/3}
 
-/* Mobile WebKit: avoid nesting position:fixed on html, body, the app and
-   dialog. Keep the home viewport locked using normal layout instead. The
-   modal root is the only fixed dialog layer, sized to the visual viewport. */
+
+/* Mobile WebKit: one viewport-anchored modal layer. Do not apply
+   visualViewport.offsetTop or offsetLeft to a fixed-position element. */
 html:is([data-device=phone],[data-tablet=true])[data-view=home],
 html:is([data-device=phone],[data-tablet=true])[data-view=home] body{
-  position:static;inset:auto;width:100%;height:100%;height:var(--touch-viewport-height,100dvh);
+  position:static;inset:auto;width:100%;height:100%;height:100dvh;
   overflow:hidden!important;overscroll-behavior:none;scroll-behavior:auto
 }
 html:is([data-device=phone],[data-tablet=true])[data-view=home] .app-shell{
@@ -618,17 +618,16 @@ html:is([data-device=phone],[data-tablet=true])[data-view=home] .app-shell{
   overflow:hidden!important
 }
 html:is([data-device=phone],[data-tablet=true])[data-view=home] .main-shell{height:100%;min-height:0}
+@supports(overflow:clip){
+  html:is([data-device=phone],[data-tablet=true])[data-view=home] :is(.app-shell,.main-shell,#app-content){overflow:clip!important}
+}
 html:is([data-device=phone],[data-tablet=true]) #modal-root:not(:empty){
-  position:fixed;top:var(--touch-viewport-top,0px);left:var(--touch-viewport-left,0px);
-  width:var(--touch-viewport-width,100vw);height:var(--touch-viewport-height,100dvh);
-  z-index:60;overflow:hidden;isolation:isolate
+  position:fixed;inset:0;width:auto;height:auto;
+  z-index:60;overflow:hidden;isolation:isolate;overscroll-behavior:none
 }
 html:is([data-device=phone],[data-tablet=true]) #modal-root>.modal-backdrop{
-  position:absolute;inset:0;width:100%;height:100%;min-height:0
+  position:absolute;inset:0;width:auto;height:auto;min-height:0
 }
-html:is([data-device=phone],[data-tablet=true]) #modal-root .switch-screen{
-  max-height:100%
-}
-html:is([data-device=phone],[data-tablet=true]) #modal-root .switch-detail-screen{
-  max-height:100%
-}
+html:is([data-device=phone],[data-tablet=true]) #modal-root :is(.switch-screen,.switch-detail-screen){max-height:100%}
+html[data-device=phone] #modal-root>.detail-backdrop{background:var(--bg)}
+html[data-device=phone] #modal-root .detail-backdrop .switch-detail-screen{height:100%;max-height:100%}

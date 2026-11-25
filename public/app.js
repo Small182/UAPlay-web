@@ -556,7 +556,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.62 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.63 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -1013,30 +1013,27 @@ function observeHomeRail(){
 }
 window.addEventListener('resize',fitHomeRail,{passive:true});
 phoneOrientation.addEventListener?.('change',fitHomeRail);
-// On iOS standalone, orientationchange can precede the final visual viewport
-// resize. Keep one viewport-sized overlay and update its geometry without
-// replacing the active dialog, selected title, or video.
+// Mobile WebKit: use the CSS viewport for geometry, not visualViewport
+// offsets (which can remain stale after a standalone PWA rotation).
 if(isPhone||isTablet){
   const root=document.documentElement;
+  const shell=$('.app-shell');
   const viewport=window.visualViewport;
   let viewportFrame=0,settleTimers=[];
+  function normalizeHomeScroll(){
+    if(state.view!=='home'||(viewport&&Math.abs(viewport.scale-1)>0.01))return;
+    // A fixed-height home never has document-level scrolling. Preserve its
+    // independent shelf scroll offsets and reset only the outer containers.
+    if(window.scrollX||window.scrollY)window.scrollTo({left:0,top:0,behavior:'auto'});
+    for(const el of [root,document.body,shell,$('.main-shell'),content]){
+      if(!el)continue;
+      if(el.scrollTop)el.scrollTop=0;
+      if(el.scrollLeft)el.scrollLeft=0;
+    }
+  }
   function syncTouchViewport(){
     viewportFrame=0;
-    const unzoomed=!viewport||Math.abs(viewport.scale-1)<0.01;
-    if(!unzoomed){
-      root.style.removeProperty('--touch-viewport-width');
-      root.style.removeProperty('--touch-viewport-height');
-      root.style.removeProperty('--touch-viewport-top');
-      root.style.removeProperty('--touch-viewport-left');
-      return;
-    }
-    const width=viewport?.width||window.innerWidth;
-    const height=viewport?.height||window.innerHeight;
-    if(width<=0||height<=0)return;
-    root.style.setProperty('--touch-viewport-width',Math.round(width)+'px');
-    root.style.setProperty('--touch-viewport-height',Math.round(height)+'px');
-    root.style.setProperty('--touch-viewport-top',Math.round(viewport?.offsetTop||0)+'px');
-    root.style.setProperty('--touch-viewport-left',Math.round(viewport?.offsetLeft||0)+'px');
+    normalizeHomeScroll();
     fitHomeRail();
   }
   function scheduleTouchViewport(){
@@ -1045,14 +1042,25 @@ if(isPhone||isTablet){
   function settleTouchViewport(){
     settleTimers.forEach(clearTimeout);
     scheduleTouchViewport();
-    // WebKit can report intermediate dimensions during the native rotation.
     settleTimers=[80,250,550].map(ms=>setTimeout(scheduleTouchViewport,ms));
   }
+  // Modal transitions may replace the contents several times while fetching
+  // details. Inert background controls only for the lifetime of the modal.
+  let modalOpen=false;
+  function syncModalState(){
+    const open=modal.childElementCount>0;
+    if(open===modalOpen)return;
+    modalOpen=open;
+    if(open&&shell?.contains(document.activeElement))document.activeElement.blur();
+    if(shell)shell.inert=open;
+    settleTouchViewport();
+  }
+  new MutationObserver(syncModalState).observe(modal,{childList:true});
+  syncModalState();
   window.addEventListener('resize',scheduleTouchViewport,{passive:true});
   window.addEventListener('orientationchange',settleTouchViewport,{passive:true});
   phoneOrientation.addEventListener?.('change',settleTouchViewport);
   viewport?.addEventListener('resize',scheduleTouchViewport,{passive:true});
-  viewport?.addEventListener('scroll',scheduleTouchViewport,{passive:true});
   window.addEventListener('pageshow',settleTouchViewport);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)settleTouchViewport();});
   scheduleTouchViewport();
