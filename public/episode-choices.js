@@ -33,3 +33,15 @@ export function providerEpisodeFrames(provider,data,matching){
   .filter(p=>!p.season&&!p.episode)
   .map(p=>({...p,label:'Вбудований плеєр · оберіть серію в плеєрі'}));
 }
+
+// Adjacent confirmed episode numbers; no guessing from stream order.
+export function adjacentEpisode(numbers,current,delta){
+  const list=[...new Set(numbers.filter(n=>Number.isInteger(n)&&n>0))].sort((a,b)=>a-b);
+  const index=list.indexOf(current);
+  return index<0||Math.abs(delta)!==1?undefined:list[index+delta];
+}
+// IPTV steps follow the filtered channel list visible when playback began.
+export function nextChannelIndex(index,delta,count){
+  if(!Number.isInteger(count)||count<1||!Number.isInteger(index)||index<0||index>=count||Math.abs(delta)!==1)return null;
+  return (index+delta+count)%count;
+}

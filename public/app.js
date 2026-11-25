@@ -1,7 +1,7 @@
 import { isBuiltinWallpaper } from './builtin-wallpapers.js';
 import { homeRailMetrics, wheelCardIndex, isPhoneDevice, isTabletDevice, useMobileShelves } from './desktop-layout.js';
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
-import { episodeChoices, providerEpisodeFrames } from './episode-choices.js';
+import { episodeChoices, providerEpisodeFrames, nextChannelIndex, adjacentEpisode } from './episode-choices.js';
 import { voiceChoices, preferredVoiceIndex, voiceResumeTime } from './voice-choices.js';
 const isPhone=isPhoneDevice(navigator);
 const isTablet=isTabletDevice(navigator);
@@ -45,7 +45,7 @@ const persisted = readStore();
 const state = {
   view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
   searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {}, voicePreferences:persisted.voicePreferences || {}, groupedVoices:null,
-  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
+  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], autoNextEpisode:persisted.autoNextEpisode===true, playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
   searchTimer:0, toastTimer:0, playerControlsTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -54,7 +54,7 @@ const year = item => String(item.date || '').slice(0,4) || '—';
 const imageUrl = (path, size = 'w500') => /^\/[\w-]+\.(?:jpg|png|webp)$/i.test(path || '') ? `https://image.tmdb.org/t/p/${size}${path}` : '';
 const externalImageUrl = url => { try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.href : ''; } catch { return ''; } };
 const unique = values => [...new Map(values.map(item => [keyFor(item),item])).values()];
-function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, voicePreferences:state.voicePreferences, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
+function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, voicePreferences:state.voicePreferences, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, sort:state.sort, autoNextEpisode:state.autoNextEpisode, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
 function notify(message) { clearTimeout(state.toastTimer);toastBox.textContent=message;toastBox.classList.add('show');state.toastTimer=setTimeout(()=>toastBox.classList.remove('show'),3000); }
 const toast = notify;
 function applyAccent() {
@@ -548,7 +548,8 @@ async function renderSettings() {
   try{configured=(await api('/api/health')).tmdbConfigured;}catch{}
   if(id!==state.loadId||state.view!=='settings')return;
   state.tmdbConfigured=configured;
-  content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд і дані UAPlay</p></div><button type="button" class="page-close" data-close-view aria-label="Закрити налаштування" title="Закрити">${icon('close')}</button></div>
+  content.innerHTML=`<div class="page-intro"><div><h1>Налаштування</h1><p>Зовнішній вигляд, відтворення та дані UAPlay</p></div><button type="button" class="page-close" data-close-view aria-label="Закрити налаштування" title="Закрити">${icon('close')}</button></div>
+    <div class="settings-card"><h3>Відтворення</h3><div class="setting-control autoplay-setting"><span id="auto-next-label">Автоматично відтворювати наступну серію</span><button type="button" class="btn secondary" data-auto-next role="switch" aria-labelledby="auto-next-label" aria-checked="${state.autoNextEpisode}">${state.autoNextEpisode?'Увімкнено':'Вимкнено'}</button></div></div>
     <div class="settings-card"><h3>Колір акценту</h3><p>Налаштуйте оформлення під свій смак.</p>
       <div class="swatches">${[['turquoise','#3DD7BB'],['cyan','#3BADE0'],['yellow','#F5D100'],['orange','#FF6A00'],['red','#FF2247'],['violet','#6A0DAD'],['blue','#1490D7'],['green','#12B89A'],['pink','#F42A9A'],['white','#FFFFFF']].map(([name,color])=>`<button type="button" class="swatch" style="background:${color}" data-accent="${name}" aria-label="Колір: ${name}" aria-pressed="${state.accent===name}"></button>`).join('')}</div></div>
     <div class="settings-card"><h3>Тема</h3><div class="setting-control"><button class="btn secondary" data-theme="dark">Темна</button><button class="btn secondary" data-theme="light">Світла</button></div></div><div class="settings-card"><h3>Джерела</h3>${PROVIDER_FALLBACK.map(([id,name])=>`<div class="setting-control"><span>${safe(name)}</span><button class="btn secondary" data-provider-toggle="${id}">${state.disabledProviders.includes(id)?"Вимкнено":"Увімкнено"}</button></div>`).join("")}</div><div class="settings-card"><h3>Шпалери</h3><p>Пошук Wallhaven</p><button type="button" class="btn secondary" data-wallpapers>Відкрити галерею</button></div>
@@ -556,7 +557,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.63 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.64 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -673,7 +674,7 @@ async function selectSourceEpisodes(provider,season){
   const box=$('#source-episode-list');
   try{const d=await api('/api/title/tv/'+item.id+'/season/'+season);if(!box.isConnected)return;box.innerHTML='<div class="switch-list-rows">'+(d.episodes||[]).map(e=>'<button class="switch-row" data-source-episode="'+e.number+'"><span>'+e.number+'. '+safe(e.title)+'</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>').join('')+'</div>';}catch(e){if(box.isConnected)box.textContent=e.message;}
 }
-async function loadProvider(provider){
+async function loadProvider(provider,autoPlay=false){
   if(!PROVIDER_FALLBACK.some(([id])=>id===provider))return;
   const item=state.activeItem;if(!item)return;
   state.activeProvider=provider;
@@ -689,7 +690,7 @@ async function loadProvider(provider){
       data=await api(`/api/providers/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(item.originalTitle)}&type=${encodeURIComponent(item.type)}&original=${encodeURIComponent(item.title)}&year=${encodeURIComponent(releaseYear)}${seasonParam}`);
     if(keyFor(state.activeItem)!==chosen||state.activeProvider!==provider||!box.isConnected)return;
     state.sourceResults=data.results||[];
-    if(state.sourceResults.length===1){await playProviderMedia(provider,state.sourceResults[0].id);return;}
+    if(state.sourceResults.length===1){await playProviderMedia(provider,state.sourceResults[0].id,autoPlay);return;}
     box.innerHTML=data.results?.length?data.results.map((source,i)=>`<button type="button" class="switch-row" data-media-provider="${safe(provider)}" data-media-id="${safe(source.id)}"><span class="row-index">${i+1}.</span><span>${safe(source.title)}${source.year&&!source.title.includes(String(source.year))?` · ${source.year}`:""}${source.season&&!source.title.includes(String(source.season)+' сезон')?` · Сезон ${source.season}`:""}</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>`).join(''):
       '<p class="switch-subtitle">'+(data.searchDiagnostic?.blocked?'Джерело обмежило запити. Спробуйте пізніше.':'Нічого не знайдено.')+'</p>'+ (data.searchDiagnostic?'<details class="section-note"><summary>Діагностика пошуку</summary><p>'+safe(data.searchDiagnostic.attempts.map(a=>a.term+': '+(a.error?'HTTP '+a.error:a.count+' карток')).join(' · '))+'</p></details>':'');
   }catch(e){if(box.isConnected&&state.activeProvider===provider)box.innerHTML=`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-provider="${safe(provider)}">Повторити пошук</button><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>`;}
@@ -703,7 +704,7 @@ function openEmbeddedPlayer(provider,value){
     <iframe class="provider-video-frame" src="${safe(target)}" title="Відеоплеєр джерела" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen; autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>`,'providers','embedded-player-body');
 }
-function renderStreamChoices(data){
+function renderStreamChoices(data,autoPlay=false){
   const source=state.activeSource;
   if(!source)return;
   const streams=Array.isArray(data.streams)?data.streams:[];
@@ -714,6 +715,18 @@ function renderStreamChoices(data){
   const choices=isTV?matching.selected:hasMovieFrames?[]:streams;
   const voices=voiceChoices(source.provider,isTV,choices);
   state.groupedVoices=voices.length?{source,season:state.selectedSeason,episode:state.selectedEpisode,rows:voices}:null;
+  if(autoPlay&&isTV){
+    const item=state.activeItem;
+    if(voices.length){
+      const prefKey=keyFor(item)+':'+source.provider;
+      const index=preferredVoiceIndex(voices,state.voicePreferences[prefKey]);
+      openPlayer(item,voices[index].url,null,{rows:voices,index,prefKey});return;
+    }
+    if(choices.length){openPlayer(item,choices[0].url);return;}
+    // Only use an iframe automatically when it explicitly identifies the episode.
+    const exactFrames=[...new Set((matching.frames||[]).map(p=>playerFrameUrl(source.provider,p.url)).filter(Boolean))];
+    if(exactFrames.length===1){state.playerEmbeds=exactFrames;openEmbeddedPlayer(source.provider,exactFrames[0]);return;}
+  }
   const unverified=[]; // Never present a full unlabeled list as the selected episode.
   const emptyMessage=data.mediaStatus==='licensed'?'Mikai не надає плеєр для цього ліцензованого аніме.':(episodes.length&&streams.length)||data.playerEmbeds?.some(p=>p.episode)?'Для вибраної серії немає доступного відео.':data.mediaStatus==='access_denied'?'Відеосервер відхилив запит.':data.mediaStatus==='removed'?'Відео недоступне або видалене на стороні джерела.':data.mediaStatus==='upstream_error'?'Не вдалося отримати відповідь відеосервера.':data.mediaStatus==='no_supported_media'?'Сторінка містить вкладений плеєр, але він не надав сумісного MP4/HLS.':'На сторінці немає доступного прямого MP4/HLS.';
   const list=voices.length?`<button type="button" class="switch-row" data-voice-group><span class="row-index">1.</span><span>Відтворити${voices.length>1?` · Озвучень: ${voices.length}`:''}</span><span class="row-trailing">▶</span></button>`:choices.map((stream,i)=>`<button type="button" class="switch-row" data-stream-url="${safe(stream.url)}"><span class="row-index">${i+1}.</span><span>${safe(state.activeItem?.type==='movie'&&['uaserials','eneyida'].includes(source.provider)&&choices.length===2?(i===0?'Фільм':'Трейлер'):(isTV?`Варіант ${i+1}${stream.voice&&stream.voice!==stream.label?' · '+stream.voice:''}`:stream.label||stream.voice||`Варіант ${i+1}`))} · ${stream.type==='hls'?'HLS':'MP4'}</span><span class="row-trailing">▶</span></button>`).join('');
@@ -723,17 +736,17 @@ function renderStreamChoices(data){
   const frameList=frames.map((p,i)=>`<button class="switch-row" type="button" data-embed-provider="${safe(source.provider)}" data-embed-url="${safe(p.url)}"><span class="row-index">${choices.length+i+1}.</span><span>${safe(p.label||'Вбудований плеєр')} · Web</span><span class="row-trailing">▶</span></button>`).join('');
   modal.innerHTML=switchScreen('Вибір відео',`<p class="switch-subtitle">${safe(state.activeItem?.title||'')} ${state.activeItem?.type==='tv'?`· Сезон ${state.selectedSeason} · Серія ${state.selectedEpisode}`:''}</p><div class="switch-list-rows">${(list+frameList)||(unknownList?`<p class="switch-subtitle">Номер серії не підтверджений джерелом. Оберіть потрібний варіант вручну.</p>${unknownList}`:`<p class="switch-subtitle">${safe(emptyMessage)}</p><button class="btn secondary" data-back-providers>Обрати інше джерело</button>`)}</div>${!choices.length&&!frames.length&&!unverified.length&&data.warnings?.length?`<p class="switch-subtitle">${safe(data.warnings[0].message)}</p>`:''}${source.provider==='mikai'?'<p class="section-note">Дані та озвучення: <a href="https://mikai.me/" target="_blank" rel="noopener noreferrer">Mikai ↗</a></p>':''}${browserSourceButton(source.provider,source.url,'Відкрити сторінку з плеєром у UAPlay')}`, 'providers');
 }
-async function playProviderMedia(provider,id){
+async function playProviderMedia(provider,id,autoPlay=false){
   if(!PROVIDER_FALLBACK.some(([key])=>key===provider))return;
   const item=state.activeItem;if(!item)return;
   state.playerEmbeds=[];
   const sourceSeason=state.sourceResults?.find(s=>s.id===id&&s.provider===provider)?.season||0;
   state.activeSource={provider,id,season:sourceSeason,url:!['mikai','animeon'].includes(provider)?id:''};
   modal.innerHTML=switchScreen('Пошук потоку','<p class="switch-subtitle">Отримуємо відео та список серій із джерела…</p>','providers');
-  const chosen=keyFor(item),activeRequest=state.activeSource,season=state.selectedSeason,episode=state.selectedEpisode;
+  const chosen=keyFor(item),activeRequest=state.activeSource,season=state.selectedSeason,episode=state.selectedEpisode,screen=modal.firstElementChild;
   try{
     const data=await api(`/api/providers/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(id)}`);
-    if(keyFor(state.activeItem)!==chosen||state.activeSource!==activeRequest||state.selectedSeason!==season||state.selectedEpisode!==episode||state.activeProvider!==provider)return;
+    if(!screen?.isConnected||!state.activeItem||keyFor(state.activeItem)!==chosen||state.activeSource!==activeRequest||state.selectedSeason!==season||state.selectedEpisode!==episode||state.activeProvider!==provider)return;
     const streams=data.streams||[];
     if(provider==='uafilm'&&item.type==='movie'){
       const frames=[...new Set((data.playerEmbeds||[]).map(p=>playerFrameUrl(provider,p.url)).filter(Boolean))];
@@ -742,9 +755,9 @@ async function playProviderMedia(provider,id){
     if(streams.length===1 && (!item.type || item.type!=='tv') && !(data.episodes?.length>1) && !data.playerEmbeds?.length) {
       openPlayer(item,streams[0].url);return;
     }
-    renderStreamChoices(data);
+    renderStreamChoices(data,autoPlay);
   }catch(e){
-    if($('#modal-root .switch-screen')&&state.activeSource===activeRequest&&state.selectedSeason===season&&state.selectedEpisode===episode&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url&&provider!=='uafilm'?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
+    if(screen?.isConnected&&$('#modal-root .switch-screen')&&state.activeSource===activeRequest&&state.selectedSeason===season&&state.selectedEpisode===episode&&state.activeProvider===provider)modal.innerHTML=switchScreen('Потік недоступний',`<p class="switch-subtitle">${safe(e.message)}</p><button type="button" class="btn secondary" data-back-providers>Обрати інше джерело</button>${browserSourceButton(provider,state.activeSource?.url,'Відкрити сторінку з плеєром у UAPlay')}${state.activeSource?.url&&provider!=='uafilm'?`<a class="source-external" href="${safe(state.activeSource.url)}" target="_blank" rel="noopener noreferrer">Перевірити на сайті джерела ↗</a>`:''}`,'providers');
   }
 }
 
@@ -776,19 +789,19 @@ function cleanupPlayer() {
   for(const url of state.subtitleUrls)URL.revokeObjectURL(url);state.subtitleUrls=[];
   const video=modal.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}
 }
-function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
+function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null, channelList=null) {
   cleanupPlayer();
   if(state.downloadActive){const job=state.downloads.find(j=>j.id===state.downloadActive.id);if(job){job.status='queued';state.downloadActive.controller.abort();}}
   const key=keyFor(item);
-  state.activePlayer={key,item,season:state.selectedSeason,episode:state.selectedEpisode,voiceGroup,playAttempt:null};
+  state.activePlayer={key,item,season:state.selectedSeason,episode:state.selectedEpisode,voiceGroup,channelList,provider:state.activeProvider,source:state.activeSource,playAttempt:null};
   const storedUrl= presetUrl || state.sources[key] || '';
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="player-modal" role="dialog" aria-modal="true" aria-label="Плеєр">
     <div class="player-top"><h2>${safe(item.title)}</h2><button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button></div>
     <div class="player-frame"><video id="video" playsinline webkit-playsinline preload="metadata" tabindex="0" aria-label="Відео: дотик або клік — показати чи сховати керування" poster="${safe(imageUrl(item.backdrop,'w1280'))}"></video>
-      <div class="switch-player-panel" id="switch-player-panel"><div class="switch-player-seek"><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
+      <div class="switch-player-panel" id="switch-player-panel"><div class="switch-player-seek"${item.type==='iptv'?' hidden':''}><span id="time-elapsed">0:00</span><input type="range" id="video-seek" min="0" max="100" step="0.1" value="0" aria-label="Перемотування"><span id="time-total">0:00</span></div>
       <div class="switch-player-bottom">
         <label class="switch-volume" title="Гучність"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M16 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/></svg><input type="range" id="player-volume" min="0" max="1" step="0.01" value="${state.playerVolume}" aria-label="Гучність" style="--volume-fill:${state.playerVolume*100}%"></label>
-        <div class="switch-player-actions${item.type==='tv'?' series-transport':''}">${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="-1" aria-label="Попередня серія" title="Попередня серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 6-6 6 6 6m8-12-6 6 6 6"/></svg></button>':''}<button type="button" class="switch-transport" data-seek="-10" aria-label="Назад 10 секунд" title="Назад 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15.5 5-7 7 7 7"/></svg></button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Відтворити">${transportPlayIcon(true)}</button><button type="button" class="switch-transport" data-seek="10" aria-label="Вперед 10 секунд" title="Вперед 10 секунд"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8.5 5 7 7-7 7"/></svg></button>${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="1" aria-label="Наступна серія" title="Наступна серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 6 6 6-6 6m8-12 6 6-6 6"/></svg></button>':''}</div>
+        <div class="switch-player-actions${item.type==='tv'?' series-transport':''}">${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="-1" aria-label="Попередня серія" title="Попередня серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 6-6 6 6 6m8-12-6 6 6 6"/></svg></button>':''}<button type="button" class="switch-transport" ${item.type==='iptv'?'data-channel-step="-1" aria-label="Попередній канал" title="Попередній канал"':'data-seek="-10" aria-label="Назад 10 секунд" title="Назад 10 секунд"'}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15.5 5-7 7 7 7"/></svg></button><button type="button" class="switch-transport switch-play" data-toggle-play aria-label="Відтворити">${transportPlayIcon(true)}</button><button type="button" class="switch-transport" ${item.type==='iptv'?'data-channel-step="1" aria-label="Наступний канал" title="Наступний канал"':'data-seek="10" aria-label="Вперед 10 секунд" title="Вперед 10 секунд"'}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8.5 5 7 7-7 7"/></svg></button>${item.type==='tv'?'<button type="button" class="switch-transport switch-episode" data-episode-step="1" aria-label="Наступна серія" title="Наступна серія"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 6 6 6-6 6m8-12 6 6-6 6"/></svg></button>':''}</div>
         <div class="switch-player-tools"><button type="button" class="switch-player-tool" data-player-settings aria-controls="player-settings" aria-expanded="false" aria-label="Налаштування плеєра" title="Налаштування">${icon('settings')}</button><button type="button" class="switch-fullscreen switch-player-tool" data-fullscreen aria-label="Повний екран" title="Повний екран"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
       </div></div></div>
     ${presetUrl||localBlob?'':`<form id="stream-form" class="player-form"><input id="stream-url" class="input-line" type="url" spellcheck="false" autocomplete="off" placeholder="https://…/video.m3u8 або .mp4" aria-label="Адреса відеопотоку" value="${safe(storedUrl)}" required><button class="btn primary" type="submit">${icon('play')} Відтворити</button></form>`}
@@ -831,7 +844,12 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null) {
   });
   let lastSave=0;
   video.addEventListener('timeupdate',()=>{if($('#video')===video&&!state.activePlayer?.playAttempt?.switching&&Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();rememberPlayback(item,Math.floor(video.currentTime));}});
-  video.addEventListener('ended',()=>{rememberPlayback(item,0,true);});
+  video.addEventListener('ended',()=>{
+    const player=state.activePlayer;
+    if($('#video')!==video||player?.item!==item||player.playAttempt?.switching)return;
+    rememberPlayback(item,0,true);
+    if(item.type==='tv'&&state.autoNextEpisode)stepEpisode(1);
+  });
   video.addEventListener('error',()=>{const help=$('#player-help');if(help)help.textContent='Не вдалося відтворити потік. Перевірте кодек, доступність адреси, CORS або обмеження джерела.';});
   if(localBlob){state.objectUrl=URL.createObjectURL(localBlob);video.src=state.objectUrl;video.play().catch(()=>{});}else if(presetUrl)startPlayback(presetUrl); // Browsers may require tapping Play in their native controls.
 }
@@ -892,11 +910,22 @@ function refreshMediaOptions(){
   fill('#player-quality',(h?.levels||[]).map((x,i)=>[i,(x.height||'?')+'p']), 'Авто');
   fill('#player-track',Array.from(h?.subtitleTracks?.length?h.subtitleTracks:v.textTracks||[]).map((x,i)=>[i,x.name||x.label||x.lang||x.language||('Доріжка '+(i+1))]),'Вимкнено');
 }
+function openChannel(index,list=state.visibleChannels||[]){
+  const channel=list[index];if(!channel)return;
+  openPlayer({id:index,type:'iptv',title:channel.name},channel.url,null,null,list.slice());
+}
+function stepChannel(delta){
+  const player=state.activePlayer;
+  if(player?.item.type!=='iptv')return;
+  const list=player.channelList||[];
+  const next=nextChannelIndex(player.item.id,delta,list.length);
+  if(next!==null&&next!==player.item.id)openChannel(next,list);
+}
 async function stepEpisode(delta){
   const player=state.activePlayer,item=player?.item;
   if(!item||item.type!=='tv'||player.episodePending)return;
   player.episodePending=true;
-  const season=player.season,episode=player.episode,provider=state.activeProvider;
+  const season=player.season,episode=player.episode,provider=player.provider||state.activeProvider,source=player.source;
   const buttons=[...modal.querySelectorAll('[data-episode-step]')];
   buttons.forEach(b=>b.disabled=true);
   setPlayerControls(true);
@@ -906,7 +935,7 @@ async function stepEpisode(delta){
     const numbers=(data.episodes||[]).map(e=>e.number).sort((a,b)=>a-b);
     const index=numbers.indexOf(episode);
     if(index<0)return toast('Не вдалося визначити поточну серію');
-    let next=numbers[index+delta],nextSeason=season;
+    let next=adjacentEpisode(numbers,episode,delta),nextSeason=season;
     if(!next){
       nextSeason=season+delta;if(nextSeason<1)return toast('Інших серій немає');
       const other=await api('/api/title/tv/'+item.id+'/season/'+nextSeason);
@@ -914,8 +943,16 @@ async function stepEpisode(delta){
       const list=(other.episodes||[]).map(e=>e.number).sort((a,b)=>a-b);next=delta>0?list[0]:list.at(-1);
     }
     if(!next)return toast('Інших серій немає');
+    // Preserve the current provider. Reuse the known source only within the
+    // same season; episodeChoices must still confirm the exact next episode.
     state.selectedSeason=nextSeason;state.selectedEpisode=next;showSources(item);
-    if(provider&&!state.disabledProviders.includes(provider))loadProvider(provider);
+    if(provider&&!state.disabledProviders.includes(provider)){
+      if(source?.id&&source.provider===provider&&nextSeason===season){
+        state.activeProvider=provider;
+        state.sourceResults=[source];
+        await playProviderMedia(provider,source.id,true);
+      }else await loadProvider(provider,true);
+    }
   }catch(e){if(state.activePlayer===player)toast(e.message);}
   finally{player.episodePending=false;if(state.activePlayer===player){buttons.forEach(b=>b.disabled=false);setPlayerControls(true,3000);}}
 }
@@ -949,10 +986,12 @@ document.addEventListener('click',async event=>{
   if(action.dataset.libraryTab){state.libraryTab=action.dataset.libraryTab==='history'?'history':'saved';renderFavorites();return;}
   if(action.hasAttribute('data-clear-history')){if(confirm('Очистити історію і прогрес, зберігши вибране?')){state.history={};state.progress={};state.episodeProgress={};state.lastEpisode={};save();renderFavorites();}return;}
   if(action.dataset.markWatched){const item=state.lists[action.dataset.markWatched]||state.activeItem;if(item){state.history[keyFor(item)]={...item,watchedAt:Date.now(),completed:true};delete state.progress[keyFor(item)];save();drawDetails(item);}return;}
+  if(action.hasAttribute('data-auto-next')){state.autoNextEpisode=!state.autoNextEpisode;save();action.setAttribute('aria-checked',String(state.autoNextEpisode));action.textContent=state.autoNextEpisode?'Увімкнено':'Вимкнено';return;}
   if(action.dataset.theme){state.theme=action.dataset.theme;applyAccent();save();renderSettings();return;}
   if(action.dataset.providerToggle){const v=action.dataset.providerToggle;state.disabledProviders=state.disabledProviders.includes(v)?state.disabledProviders.filter(x=>x!==v):[...state.disabledProviders,v];save();renderSettings();return;}
   if(action.dataset.offlinePlay){try{const r=await offlineOperation('readonly','get',action.dataset.offlinePlay);if(r)openPlayer({id:r.id,type:'local',title:r.name},null,r.blob);}catch(e){toast(e.message);}return;}
   if(action.dataset.offlineDelete){if(confirm('Видалити локальне відео?'))try{await offlineOperation('readwrite','delete',action.dataset.offlineDelete);renderFavorites();}catch(e){toast(e.message);}return;}
+  if(action.dataset.channelStep){stepChannel(Number(action.dataset.channelStep));return;}
   if(action.dataset.episodeStep){stepEpisode(Number(action.dataset.episodeStep));return;}
   if(action.dataset.shelfStep){state.homeShelf=((state.homeShelf||0)+Number(action.dataset.shelfStep)+HOME_SHELVES.length)%HOME_SHELVES.length;await renderHome();return;}
   if(action.dataset.view){await showView(action.dataset.view);return;}
@@ -980,7 +1019,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.player){const key=action.dataset.player;const item=state.lists[key]||state.activeItem;if(item)openPlayer(item);return;}
   if(action.dataset.channelFavorite!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channelFavorite)];if(c){if(state.iptvFavorites[c.url])delete state.iptvFavorites[c.url];else state.iptvFavorites[c.url]=c;save();if(state.iptvOnlyFavorites)paintChannels();else{const saved=!!state.iptvFavorites[c.url];const label=saved?'Прибрати з вибраного':'Додати у вибране';action.setAttribute('aria-pressed',String(saved));action.setAttribute('aria-label',label+': '+c.name);action.title=label;action.querySelector('svg')?.setAttribute('fill',saved?'currentColor':'none');}}return;}
   if(action.hasAttribute('data-iptv-favorites')){state.iptvOnlyFavorites=!state.iptvOnlyFavorites;state.iptvGroup='';action.textContent=state.iptvOnlyFavorites?'Усі канали':'☆ Вибране';action.setAttribute('aria-pressed',String(state.iptvOnlyFavorites));paintChannels();return;}
-  if(action.dataset.channel!==undefined){const c=state.visibleChannels?.[Number(action.dataset.channel)];if(c)openPlayer({id:Number(action.dataset.channel),type:'iptv',title:c.name},c.url);return;}
+  if(action.dataset.channel!==undefined){openChannel(Number(action.dataset.channel));return;}
   if(action.hasAttribute('data-wallpapers')){openWallpapers();return;}
   if(action.hasAttribute('data-wallpaper-retry')){retryWallpapers();return;}
   if(action.dataset.setWallpaper){state.wallpaper=action.dataset.setWallpaper;save();applyWallpaper();closeModal();toast('Шпалери застосовано');return;}
@@ -1132,6 +1171,7 @@ document.addEventListener('keydown',event=>{
     }else if(event.key==='ArrowLeft'||event.key==='ArrowRight'||event.key==='ArrowUp'||event.key==='ArrowDown'){
       event.preventDefault();
       const offset=event.key==='ArrowLeft'?-10:event.key==='ArrowRight'?10:event.key==='ArrowUp'?60:-60;
+      if(state.activePlayer?.item.type==='iptv'){stepChannel(offset>0?1:-1);return;}
       if(Number.isFinite(video.duration))video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+offset));
       setPlayerControls(true,3000);
     }else if(key==='f'){

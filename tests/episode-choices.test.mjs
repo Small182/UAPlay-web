@@ -30,3 +30,11 @@ test('only UAFilm retains an explicitly manual generic player fallback',()=>{
  assert.deepEqual(providerEpisodeFrames('uaserials',data,match),[]);
  assert.deepEqual(providerEpisodeFrames('eneyida',data,match),[]);
 });
+
+import {adjacentEpisode,nextChannelIndex} from '../public/episode-choices.js';
+test('episode step uses adjacent numbered episodes and stops at season boundary',()=>{
+ assert.equal(adjacentEpisode([3,1,2,2],2,1),3);assert.equal(adjacentEpisode([3,1,2],2,-1),1);assert.equal(adjacentEpisode([1,2],2,1),undefined);assert.equal(adjacentEpisode([1,2],1,-1),undefined);assert.equal(adjacentEpisode([1,3],2,1),undefined);
+});
+test('IPTV channel step wraps within the visible list',()=>{
+ assert.equal(nextChannelIndex(0,-1,3),2);assert.equal(nextChannelIndex(2,1,3),0);assert.equal(nextChannelIndex(1,1,3),2);assert.equal(nextChannelIndex(0,1,1),0);assert.equal(nextChannelIndex(0,1,0),null);
+});
