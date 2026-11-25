@@ -655,3 +655,11 @@ html[data-tablet=true] #modal-root>.detail-backdrop{background:var(--bg)}
  html[data-tablet=true] #modal-root :is(.switch-screen,.switch-detail-screen){padding-top:0}
  html[data-tablet=true] .switch-screen-header{padding-top:14px}
 }
+
+/* Per-episode local viewing status; keep the existing chevron and row layout. */
+.episode-select-row .episode-select-label{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;overflow-wrap:anywhere}
+.episode-watch-state{display:flex;align-items:center;gap:5px;font-size:12px;line-height:1.3;font-weight:500;color:var(--muted);margin-top:3px}
+.episode-watch-state.watched{color:var(--accent)}
+.episode-watch-state.started{color:var(--text)}
+.episode-watch-state svg{width:15px;height:15px;stroke-width:2.5;flex-shrink:0}
+:root[data-theme=light] .episode-watch-state.watched{color:#087a60}

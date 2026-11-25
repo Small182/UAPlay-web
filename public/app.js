@@ -1,7 +1,7 @@
 import { isBuiltinWallpaper } from './builtin-wallpapers.js';
 import { homeRailMetrics, wheelCardIndex, isPhoneDevice, isTabletDevice, useMobileShelves } from './desktop-layout.js';
 import { providerFrameUrl, playerFrameUrl } from './provider-frame.js';
-import { episodeChoices, providerEpisodeFrames, nextChannelIndex, automaticEpisodeChoice } from './episode-choices.js';
+import { episodeChoices, providerEpisodeFrames, nextChannelIndex, automaticEpisodeChoice, restoreWatchedEpisodes, episodeWatchStatus } from './episode-choices.js';
 import { voiceChoices, preferredVoiceIndex, voiceResumeTime } from './voice-choices.js';
 const isPhone=isPhoneDevice(navigator);
 const isTablet=isTabletDevice(navigator);
@@ -45,7 +45,7 @@ const persisted = readStore();
 const state = {
   view:'home', demo:[], demoMode:false, tmdbConfigured:false, home:{}, lists:{}, page:1,
   searchQuery:'', favorites: persisted.favorites || {}, progress: persisted.progress || {}, sources:persisted.sources || {}, voicePreferences:persisted.voicePreferences || {}, groupedVoices:null,
-  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', autoNextEpisode: persisted.autoNextEpisode === true, sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
+  history: persisted.history || {}, episodeProgress: persisted.episodeProgress || {}, watchedEpisodes:restoreWatchedEpisodes(persisted.watchedEpisodes,persisted.history,persisted.lastEpisode), lastEpisode: persisted.lastEpisode || {}, disabledProviders: (Array.isArray(persisted.disabledProviders)?persisted.disabledProviders:[]).filter(id=>['uaserials','eneyida','uafilm','mikai','animeon'].includes(id)), theme: persisted.theme || 'dark', autoNextEpisode: persisted.autoNextEpisode === true, sort: persisted.sort || 'popularity', iptvFavorites: persisted.iptvFavorites || {}, libraryTab:'saved', iptvGroup:'', iptvOnlyFavorites:false, downloads:[], downloadActive:null, subtitleUrls:[], playerRate:1, playerVolume:1, wakeLock:null, objectUrl:null, accent: persisted.accent || 'turquoise', wallpaper: persisted.wallpaper || '', activeItem:null, selectedSeason:1, selectedEpisode:1, activeProvider:'',activeSource:null,activePlayer:null, hls:null,
   searchTimer:0, toastTimer:0, playerControlsTimer:0, iptvCountry:'ua', channels:[], channelQuery:'', loadId:0
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -54,7 +54,7 @@ const year = item => String(item.date || '').slice(0,4) || '—';
 const imageUrl = (path, size = 'w500') => /^\/[\w-]+\.(?:jpg|png|webp)$/i.test(path || '') ? `https://image.tmdb.org/t/p/${size}${path}` : '';
 const externalImageUrl = url => { try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.href : ''; } catch { return ''; } };
 const unique = values => [...new Map(values.map(item => [keyFor(item),item])).values()];
-function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, voicePreferences:state.voicePreferences, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, autoNextEpisode:state.autoNextEpisode, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
+function save() { try { localStorage.setItem(STORE, JSON.stringify({ favorites:state.favorites, progress:state.progress, sources:state.sources, voicePreferences:state.voicePreferences, accent:state.accent, wallpaper:state.wallpaper, history:state.history, episodeProgress:state.episodeProgress, watchedEpisodes:state.watchedEpisodes, lastEpisode:state.lastEpisode, disabledProviders:state.disabledProviders, theme:state.theme, autoNextEpisode:state.autoNextEpisode, sort:state.sort, iptvFavorites:state.iptvFavorites })); } catch { toast('Не вдалося зберегти дані браузера'); } }
 function notify(message) { clearTimeout(state.toastTimer);toastBox.textContent=message;toastBox.classList.add('show');state.toastTimer=setTimeout(()=>toastBox.classList.remove('show'),3000); }
 const toast = notify;
 function applyAccent() {
@@ -413,6 +413,16 @@ async function performSearch() {
 function episodeKey(item,season=state.selectedSeason,episode=state.selectedEpisode){
   return keyFor(item)+':'+season+':'+episode;
 }
+function episodeStatusMarkup(item,season,episode){
+  const key=episodeKey(item,season,episode);
+  const status=episodeWatchStatus(state.watchedEpisodes,key,state.episodeProgress);
+  if(status.kind==='watched')return '<span class="episode-watch-state watched">'+icon('check')+' Переглянуто</span>';
+  if(status.kind==='started'){
+    const mins=Math.floor(status.seconds/60),secs=String(status.seconds%60).padStart(2,'0');
+    return '<span class="episode-watch-state started">Зупинено на '+mins+':'+secs+'</span>';
+  }
+  return '<span class="episode-watch-state">Не переглянуто</span>';
+}
 function rememberPlayback(item,seconds,finished=false){
   if(!item||!['movie','tv'].includes(item.type))return;
   const key=keyFor(item);
@@ -420,7 +430,7 @@ function rememberPlayback(item,seconds,finished=false){
   if(item.type==='tv'){
     const s=state.activePlayer?.season||state.selectedSeason,e=state.activePlayer?.episode||state.selectedEpisode;
     const ek=episodeKey(item,s,e);
-    if(finished)delete state.episodeProgress[ek];else state.episodeProgress[ek]=seconds;
+    if(finished){state.watchedEpisodes[ek]=true;delete state.episodeProgress[ek];}else state.episodeProgress[ek]=seconds;
     state.lastEpisode[key]={season:s,episode:e};
   }else if(finished)delete state.progress[key];else state.progress[key]=seconds;
   save();
@@ -557,7 +567,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.65 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.66 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -626,7 +636,7 @@ async function loadSeason(number) {
   try{
     const data=await api(`/api/title/tv/${item.id}/season/${number}`);
     if(keyFor(state.activeItem)!==currentKey || !$('#episode-list'))return;
-    target.innerHTML=(data.episodes||[]).map(ep=>`<button type="button" class="episode" data-episode="${ep.number}" aria-label="Серія ${ep.number}"><span class="episode-num">${ep.number}</span><div class="episode-info"><div class="episode-title">${safe(ep.title)}</div><div class="episode-desc">${safe(ep.overview||'')}</div></div><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>`).join('') || '<p class="muted">Серій не знайдено.</p>';
+    target.innerHTML=(data.episodes||[]).map(ep=>`<button type="button" class="episode" data-episode="${ep.number}" aria-label="Серія ${ep.number}"><span class="episode-num">${ep.number}</span><div class="episode-info"><div class="episode-title">${safe(ep.title)}</div>${episodeStatusMarkup(item,number,ep.number)}<div class="episode-desc">${safe(ep.overview||'')}</div></div><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>`).join('') || '<p class="muted">Серій не знайдено.</p>';
   }catch(e){if($('#episode-list'))$('#episode-list').innerHTML=`<p class="muted">${safe(e.message)}</p>`;}
 }
 const PROVIDER_FALLBACK=[['uaserials','UASerials'],['eneyida','Eneyida'],['uafilm','UAFilm'],['mikai','Mikai'],['animeon','AnimeON']];
@@ -672,7 +682,7 @@ async function selectSourceEpisodes(provider,season){
   state.selectedSeason=season;state.activeProvider='';const item=state.activeItem;
   modal.innerHTML=switchScreen('Оберіть серію','<div id="source-episode-list">Завантажуємо…</div>','seasons');
   const box=$('#source-episode-list');
-  try{const d=await api('/api/title/tv/'+item.id+'/season/'+season);if(!box.isConnected)return;box.innerHTML='<div class="switch-list-rows">'+(d.episodes||[]).map(e=>'<button class="switch-row" data-source-episode="'+e.number+'"><span>'+e.number+'. '+safe(e.title)+'</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>').join('')+'</div>';}catch(e){if(box.isConnected)box.textContent=e.message;}
+  try{const d=await api('/api/title/tv/'+item.id+'/season/'+season);if(!box.isConnected)return;box.innerHTML='<div class="switch-list-rows">'+(d.episodes||[]).map(e=>'<button type="button" class="switch-row episode-select-row" data-source-episode="'+e.number+'"><span class="episode-select-label"><span>'+e.number+'. '+safe(e.title)+'</span>'+episodeStatusMarkup(item,season,e.number)+'</span><span class="row-trailing row-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8.5 5 7 7-7 7"/></svg></span></button>').join('')+'</div>';}catch(e){if(box.isConnected)box.textContent=e.message;}
 }
 async function loadProvider(provider,autoNext=null){
   if(!PROVIDER_FALLBACK.some(([id])=>id===provider))return;
@@ -780,7 +790,13 @@ function togglePlayerSettings(open){
   else button.focus({preventScroll:true});
 }
 const transportPlayIcon=paused=>paused?'<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><path d="M8 4.5 20 12 8 19.5Z"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+function saveCurrentPlayback(){
+  const player=state.activePlayer,video=modal.querySelector('video');
+  if(!player||!video||!player.hasPlayed||player.endedHandled||video.ended||player.playAttempt?.switching||!Number.isFinite(video.currentTime)||video.currentTime<=0)return;
+  rememberPlayback(player.item,Math.floor(video.currentTime));
+}
 function cleanupPlayer() {
+  saveCurrentPlayback();
   clearTimeout(state.playerControlsTimer);
   if(state.hls){state.hls.destroy();state.hls=null;}
   if(state.wakeLock){state.wakeLock.release().catch(()=>{});state.wakeLock=null;}
@@ -821,7 +837,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null, channelLis
   video.addEventListener('timeupdate',updateTransport);
   video.addEventListener('playing',()=>{if($('#video')===video){const help=$('#player-help');if(help)help.textContent='';}});
   video.addEventListener('play',async()=>{updateTransport();setPlayerControls(true,3000);try{const lock=await navigator.wakeLock?.request('screen');if(lock){if($('#video')===video&&!video.paused)state.wakeLock=lock;else lock.release().catch(()=>{});}}catch{}});
-  video.addEventListener('pause',()=>{updateTransport();setPlayerControls(true);});
+  video.addEventListener('pause',()=>{if($('#video')!==video)return;saveCurrentPlayback();updateTransport();setPlayerControls(true);});
   video.addEventListener('click',()=>{
     if(playerSettingsOpen()){togglePlayerSettings(false);return;}
     const hidden=video.closest('.player-frame')?.classList.contains('controls-hidden');
@@ -843,7 +859,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null, channelLis
     if(seconds>10&&Number.isFinite(video.duration)&&seconds<video.duration-15)video.currentTime=seconds;
   });
   let lastSave=0;
-  video.addEventListener('timeupdate',()=>{if($('#video')===video&&!state.activePlayer?.playAttempt?.switching&&Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();rememberPlayback(item,Math.floor(video.currentTime));}});
+  video.addEventListener('timeupdate',()=>{if($('#video')===video&&state.activePlayer?.hasPlayed&&!state.activePlayer?.endedHandled&&!video.ended&&!state.activePlayer?.playAttempt?.switching&&Date.now()-lastSave>5000&&video.currentTime>0){lastSave=Date.now();rememberPlayback(item,Math.floor(video.currentTime));}});
   video.addEventListener('ended',()=>{
     const player=state.activePlayer;
     if($('#video')!==video||player?.item!==item||player.playAttempt?.switching||player.endedHandled)return;
@@ -851,7 +867,7 @@ function openPlayer(item, presetUrl, localBlob=null, voiceGroup=null, channelLis
     rememberPlayback(item,0,true);
     if(item.type==='tv'&&state.autoNextEpisode)stepEpisode(1);
   });
-  video.addEventListener('playing',()=>{if($('#video')===video&&state.activePlayer)state.activePlayer.endedHandled=false;});
+  video.addEventListener('playing',()=>{if($('#video')===video&&state.activePlayer){state.activePlayer.endedHandled=false;state.activePlayer.hasPlayed=true;}});
   video.addEventListener('error',()=>{const help=$('#player-help');if(help)help.textContent='Не вдалося відтворити потік. Перевірте кодек, доступність адреси, CORS або обмеження джерела.';});
   if(localBlob){state.objectUrl=URL.createObjectURL(localBlob);video.src=state.objectUrl;video.play().catch(()=>{});}else if(presetUrl)startPlayback(presetUrl); // Browsers may require tapping Play in their native controls.
 }
@@ -950,6 +966,8 @@ function stepChannel(delta){
   const index=nextChannelIndex(player.item.id,delta,player.channelList.length);
   if(index!==null&&index!==player.item.id)playIptvChannel(index,player.channelList);
 }
+window.addEventListener('pagehide',saveCurrentPlayback);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveCurrentPlayback();});
 function closeModal(){wallpaperGallery?.observer?.disconnect();cleanupPlayer();modal.innerHTML='';state.activePlayer=null;runDownloadQueue();}
 
 async function init() {
@@ -978,7 +996,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.downloadResume){controlDownload(action.dataset.downloadResume,'resume');return;}
   if(action.dataset.downloadCancel){controlDownload(action.dataset.downloadCancel,'cancel');return;}
   if(action.dataset.libraryTab){state.libraryTab=action.dataset.libraryTab==='history'?'history':'saved';renderFavorites();return;}
-  if(action.hasAttribute('data-clear-history')){if(confirm('Очистити історію і прогрес, зберігши вибране?')){state.history={};state.progress={};state.episodeProgress={};state.lastEpisode={};save();renderFavorites();}return;}
+  if(action.hasAttribute('data-clear-history')){if(confirm('Очистити історію і прогрес, зберігши вибране?')){state.history={};state.progress={};state.episodeProgress={};state.watchedEpisodes={};state.lastEpisode={};save();renderFavorites();}return;}
   if(action.dataset.markWatched){const item=state.lists[action.dataset.markWatched]||state.activeItem;if(item){state.history[keyFor(item)]={...item,watchedAt:Date.now(),completed:true};delete state.progress[keyFor(item)];save();drawDetails(item);}return;}
   if(action.hasAttribute('data-auto-next')){state.autoNextEpisode=!state.autoNextEpisode;save();action.setAttribute('aria-pressed',String(state.autoNextEpisode));action.textContent=state.autoNextEpisode?'Увімкнено':'Вимкнено';return;}
   if(action.dataset.theme){state.theme=action.dataset.theme;applyAccent();save();renderSettings();return;}
@@ -1021,7 +1039,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.attachSubtitle){attachSubtitle(action.dataset.attachSubtitle);return;}
   if(action.dataset.accent){state.accent=action.dataset.accent;applyAccent();save();renderSettings();return;}
   if(action.hasAttribute('data-refresh-iptv')){renderIptv();return;}
-  if(action.hasAttribute('data-clear-local')){if(confirm('Видалити все вибране, збережені потоки та прогрес перегляду?')){state.favorites={};state.progress={};state.sources={};state.history={};state.episodeProgress={};state.lastEpisode={};save();renderSettings();toast('Локальні дані очищено');}return;}
+  if(action.hasAttribute('data-clear-local')){if(confirm('Видалити все вибране, збережені потоки та прогрес перегляду?')){state.favorites={};state.progress={};state.sources={};state.history={};state.episodeProgress={};state.watchedEpisodes={};state.lastEpisode={};save();renderSettings();toast('Локальні дані очищено');}return;}
 });
 // Desktop home: fit whole posters to the visible rail, and map wheel to card scrolling.
 const phoneOrientation=matchMedia('(orientation: landscape)');

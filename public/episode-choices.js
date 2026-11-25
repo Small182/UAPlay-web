@@ -47,3 +47,21 @@ export function nextChannelIndex(index,delta,count){
   if(!Number.isInteger(index)||index<0||index>=count||!Number.isInteger(count)||count<1||!delta)return null;
   return (index+Math.sign(delta)+count)%count;
 }
+
+export function restoreWatchedEpisodes(stored,history={},lastEpisode={}){
+  if(stored&&typeof stored==='object'&&!Array.isArray(stored))return {...stored};
+  const result={};
+  for(const [key,entry] of Object.entries(history||{})){
+    const last=lastEpisode?.[key];
+    if(key.startsWith('tv:')&&entry?.completed===true&&Number.isInteger(last?.season)&&last.season>=0&&Number.isInteger(last?.episode)&&last.episode>0){
+      result[key+':'+last.season+':'+last.episode]=true;
+    }
+  }
+  return result;
+}
+export function episodeWatchStatus(watched,key,progress){
+  if(watched?.[key]===true)return {kind:'watched'};
+  const seconds=Number(progress?.[key]);
+  if(Number.isFinite(seconds)&&seconds>=1)return {kind:'started',seconds:Math.floor(seconds)};
+  return {kind:'unwatched'};
+}
