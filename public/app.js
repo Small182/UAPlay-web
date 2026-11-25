@@ -283,8 +283,22 @@ function updateHero(movie){
   const poster=$('#catalog-hero .hero-poster');if(poster){const url=imageUrl(movie.poster,'w342');poster.innerHTML=url?`<img src="${url}" alt="Постер: ${safe(movie.title)}">`:'<span>UAPLAY</span>';}
   document.querySelectorAll('.poster-card[data-home-item]').forEach(b=>b.classList.toggle('selected',b.dataset.homeItem===keyFor(movie)));
 }
+function homePosterCards(items,movie){
+  return items.map(item=>posterCard(item).replace('class="poster-card"',`class="poster-card ${movie&&keyFor(item)===keyFor(movie)?'selected':''}" data-home-item="${safe(keyFor(item))}"`)).join('');
+}
+function renderPhonePortraitShelves(movie){
+  return '<div id="home-shelves" class="home-shelves" aria-label="Популярні добірки">'+HOME_SHELVES.map(([name,section],index)=>{
+    const items=state.home[section]||[];
+    return `<section class="home-shelf" data-home-shelf="${index}" aria-label="${safe(name)}"><div class="shelf-toolbar"><div class="shelf-title">${safe(name)}</div><button class="btn shelf-more" data-view="${section}">Більше &nbsp;›</button></div>
+      ${items.length?`<div class="poster-rail switch-rail home-shelf-rail">${homePosterCards(items,movie)}</div>`:'<div class="empty">Добірка порожня</div>'}</section>`;
+  }).join('')+'</div>';
+}
 async function renderHome() {
   const id=++state.loadId;
+  const previousShelves=$('#home-shelves');
+  const previousScroll=previousShelves?.scrollTop;
+  const previousHero=previousShelves?state.lists[$('#hero-watch')?.dataset.title]:null;
+  const previousRails=previousShelves?Array.from(previousShelves.querySelectorAll('.home-shelf-rail'),r=>r.scrollLeft):[];
   const sections=['trending','movies','series','animation','cartoons'];
   if (!Object.keys(state.home).length) {
     content.innerHTML='<div class="loading-bar"></div><div class="loading-bar" style="height:80px;margin-top:30px"></div>';
@@ -295,7 +309,27 @@ async function renderHome() {
   state.homeShelf=Math.min(state.homeShelf||0,HOME_SHELVES.length-1);
   const [name,section]=HOME_SHELVES[state.homeShelf];
   const items=state.home[section]||[];
-  const movie=items[0]||state.home.trending?.[0]||state.demo[0];
+  const movie=(phonePortrait()?previousHero:null)||items[0]||state.home.trending?.[0]||state.demo[0];
+  if(phonePortrait()){
+    content.innerHTML=`${modeBanner()}${heroPanel(movie)}${renderPhonePortraitShelves(movie)}`;
+    const shelves=$('#home-shelves');
+    const groups=Array.from(shelves.querySelectorAll('[data-home-shelf]'));
+    if(previousScroll!==undefined){
+      shelves.scrollTop=previousScroll;
+      Array.from(shelves.querySelectorAll('.home-shelf-rail')).forEach((r,i)=>{r.scrollLeft=previousRails[i]||0;});
+    }else if(state.homeShelf){
+      const group=groups[state.homeShelf];
+      if(group)shelves.scrollTop=group.offsetTop;
+    }
+    shelves.addEventListener('scroll',()=>{
+      const top=shelves.getBoundingClientRect().top;
+      let current=0;
+      for(const group of groups){if(group.getBoundingClientRect().top<=top+12)current=Number(group.dataset.homeShelf);}
+      if(shelves.scrollHeight-shelves.clientHeight-shelves.scrollTop<2&&shelves.scrollTop>0)current=groups.length-1;
+      state.homeShelf=current;
+    },{passive:true});
+    enrichHero(movie);observeHomeRail();return;
+  }
   content.innerHTML=`${modeBanner()}${heroPanel(movie)}
     <div class="shelf-toolbar"><div class="shelf-title">${safe(name)}</div><div class="shelf-actions">
       <span class="shelf-count">${state.homeShelf+1} / ${HOME_SHELVES.length}</span>
@@ -520,7 +554,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.55 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.56 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a><div class="about-web-qr"><a href="https://uaplay-web.philatov91.workers.dev/" target="_blank" rel="noopener noreferrer" aria-label="Відкрити UAPlay Web"><img src="/icons/web-qr.svg" width="148" height="148" alt="QR-код UAPlay Web"></a><div><strong>UAPlay Web</strong><p>Відскануйте QR-код, щоб відкрити сайт на телефоні.</p></div></div>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -958,6 +992,7 @@ document.addEventListener('click',async event=>{
 // Desktop home: fit whole posters to the visible rail, and map wheel to card scrolling.
 const phoneOrientation=matchMedia('(orientation: landscape)');
 const phoneLandscape=()=>isPhone&&phoneOrientation.matches;
+const phonePortrait=()=>isPhone&&!phoneOrientation.matches;
 let observedHomeRail=null,homeRailObserver=null,wheelRail=null,wheelTarget=0,wheelTime=0,wheelDelta=0;
 function fitHomeRail(){
   const rail=observedHomeRail;
@@ -976,9 +1011,9 @@ function observeHomeRail(){
   if(typeof ResizeObserver==='function'){homeRailObserver=new ResizeObserver(fitHomeRail);homeRailObserver.observe(observedHomeRail);}
 }
 window.addEventListener('resize',fitHomeRail,{passive:true});
-phoneOrientation.addEventListener?.('change',()=>{if(!isPhone)return;const rail=$('#home-rail');if(rail){rail.scrollTop=0;rail.scrollLeft=0;}fitHomeRail();});
+phoneOrientation.addEventListener?.('change',()=>{if(!isPhone)return;if(state.view==='home'&&Object.keys(state.home).length){renderHome();return;}fitHomeRail();});
 document.addEventListener('wheel',event=>{
-  if(state.view!=='home'||modal.innerHTML||phoneLandscape()||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
+  if(state.view!=='home'||modal.innerHTML||isPhone||event.ctrlKey||event.metaKey||event.shiftKey||!matchMedia('(min-width:761px)').matches)return;
   const rail=$('#home-rail');
   if(!rail||rail.scrollWidth<=rail.clientWidth||Math.abs(event.deltaX)>=Math.abs(event.deltaY)||!event.deltaY)return;
   const first=rail.querySelector('.poster-card');if(!first)return;
@@ -998,8 +1033,8 @@ document.addEventListener('wheel',event=>{
 },{passive:false});
 document.addEventListener('pointerover',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
 document.addEventListener('focusin',event=>{const card=event.target.closest('.poster-card[data-home-item]');if(card){const item=state.lists[card.dataset.homeItem];if(item)updateHero(item);}});
-let swipeY=0,swipeX=0;document.addEventListener('touchstart',event=>{if(!phoneLandscape()&&event.target.closest('#home-rail')){swipeY=event.touches[0].clientY;swipeX=event.touches[0].clientX;}else swipeY=0;},{passive:true});
-document.addEventListener('touchend',event=>{if(phoneLandscape()){swipeY=0;return;}if(!swipeY||!event.changedTouches[0])return;const dy=event.changedTouches[0].clientY-swipeY,dx=event.changedTouches[0].clientX-swipeX;swipeY=0;if(Math.abs(dy)>65&&Math.abs(dy)>Math.abs(dx)*1.25){state.homeShelf=((state.homeShelf||0)+(dy<0?1:-1)+HOME_SHELVES.length)%HOME_SHELVES.length;renderHome();}},{passive:true});
+let swipeY=0,swipeX=0;document.addEventListener('touchstart',event=>{if(!isPhone&&event.target.closest('#home-rail')){swipeY=event.touches[0].clientY;swipeX=event.touches[0].clientX;}else swipeY=0;},{passive:true});
+document.addEventListener('touchend',event=>{if(isPhone){swipeY=0;return;}if(!swipeY||!event.changedTouches[0])return;const dy=event.changedTouches[0].clientY-swipeY,dx=event.changedTouches[0].clientX-swipeX;swipeY=0;if(Math.abs(dy)>65&&Math.abs(dy)>Math.abs(dx)*1.25){state.homeShelf=((state.homeShelf||0)+(dy<0?1:-1)+HOME_SHELVES.length)%HOME_SHELVES.length;renderHome();}},{passive:true});
 function updateClock(){const clock=$('#header-clock');if(clock)clock.textContent=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});}updateClock();setInterval(updateClock,30000);
 document.addEventListener('input',event=>{
   if(event.target.id==='search-input'){state.searchQuery=event.target.value;clearTimeout(state.searchTimer);state.searchTimer=setTimeout(performSearch,320);}
@@ -1072,7 +1107,7 @@ init();
 let homeTouchX=0,homeTouchY=0;
 document.addEventListener('touchstart',event=>{if(event.touches.length===1){homeTouchX=event.touches[0].clientX;homeTouchY=event.touches[0].clientY;}},{passive:true});
 document.addEventListener('touchmove',event=>{
-  if(state.view!=='home'||modal.innerHTML||phoneLandscape()||event.touches.length!==1)return;
+  if(state.view!=='home'||modal.innerHTML||isPhone||event.touches.length!==1)return;
   const dx=Math.abs(event.touches[0].clientX-homeTouchX),dy=Math.abs(event.touches[0].clientY-homeTouchY);
   if(dy>dx&&event.cancelable)event.preventDefault();
 },{passive:false});
