@@ -219,3 +219,25 @@ test('Wallhaven caches successful repeated queries and observes upstream cooldow
   assert.equal((await run('cache-test')).wallpapers.length,1);
  });
 });
+
+test('UASerials movies reject partial titles, adjacent unrelated metadata and wrong years',async()=>{
+ const html='<a href="/1-fantastic-four-2026.html"><img src="/poster.jpg" alt="Fantastic Four"></a><span class="th-title-oname">Step Kids</span><a href="/2-step-kids-2-2026.html"><span class="th-title">Step Kids 2</span></a><a href="/3-step-kids-2025.html"><span class="th-title">Step Kids</span></a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const response=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2026&q=Step%20Kids'),{});
+  assert.deepEqual((await response.json()).results,[]);
+ });
+});
+test('UASerials movie lookup keeps exact local or original titles linked to the same article',async()=>{
+ const html='<a href="/1-film-2026.html"><img src="/poster.jpg" alt="Poster"></a><a href="/1-film-2026.html"><span class="th-title">Зразок (2026)</span><span class="th-title-oname">Sample</span></a><a href="/2-other-2026.html"><span class="th-title">Sample Returns</span></a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const response=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2026&q=Sample'),{});
+  assert.deepEqual((await response.json()).results.map(x=>x.id),['https://uaserials.my/1-film-2026.html']);
+ });
+});
+test('UASerials movie matching preserves meaningful title numbers',async()=>{
+ const html='<a href="/1-example-2026.html"><span class="th-title">Example 2</span></a><a href="/2-example-2026.html"><span class="th-title">Example</span></a>';
+ await withMockFetch(async()=>new Response(html),async()=>{
+  const response=await handleIntegration(req('/api/providers/search?provider=uaserials&type=movie&year=2026&q=Example%202'),{});
+  assert.deepEqual((await response.json()).results.map(x=>x.id),['https://uaserials.my/1-example-2026.html']);
+ });
+});

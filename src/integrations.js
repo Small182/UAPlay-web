@@ -84,6 +84,18 @@ function catalogueSeason(title){
   const match=s.match(/(?:season|сезон|sezon)[\s_-]*(\d{1,3})|(\d{1,3})[\s_-]*(?:season|сезон|sezon)/i);
   return Number(match?.[1]||match?.[2])||null;
 }
+// Movie identity is stricter than series ranking: numbers and sequel subtitles matter.
+function exactMovieTitle(value,year=0){
+  let s=String(value||'').trim();
+  s=s.replace(/\s+(?:дивитися|дивитись|смотреть|watch|онлайн|online)(?:\s.*)?$/iu,'').trim();
+  // Only remove a confirmed release-year suffix, never a year inside a title.
+  if(year>=1900)s=s.replace(new RegExp('\\s*(?:\\('+year+'\\)|[·–—]\\s*'+year+'|\\s+'+year+')\\s*$'),'').trim();
+  return normalizedTitle(s);
+}
+function exactMovieMatch(item,local,original,year){
+  const wanted=new Set([local,original].map(x=>normalizedTitle(x)).filter(Boolean));
+  return [item.title,item.original].some(x=>wanted.has(exactMovieTitle(x,year)));
+}
 function rankSources(results,local,original='',strict=false,year=0,type='',season=0,seasonYear=0){
   const a=baseCatalogueTitle(local),b=baseCatalogueTitle(original);
   const score=(x)=>Math.max(0,...[...String(x.title||'').split('/'),x.original||''].map(part=>{
@@ -112,7 +124,9 @@ function rankSources(results,local,original='',strict=false,year=0,type='',seaso
     return true;
   });
   const top=compatible[0]?.score||0;
-  let relevant=compatible.filter(x=>top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true);
+  let relevant=compatible.filter(x=>x.item.provider==='uaserials'&&type==='movie'
+    ?exactMovieMatch(x.item,local,original,year)&&(!year||!x.year||x.year===year)
+    :top>=110?x.score>=100:top>=68?x.score>0:strict?x.score>0:true);
   if(type==='tv'&&season>0)relevant.sort((x,y)=>Number(y.season===season)-Number(x.season===season)||y.score-x.score);
   return relevant.map(x=>({...x.item,year:x.year,season:x.season}));
 }
@@ -137,6 +151,22 @@ function parseHtmlSearch(provider,html,type='') {
     let label=piece.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i)?.[1]||
       classLabel(piece,'th-title(?!-oname)|movie-title|short_title|card-link__text|card-title__block|search-result-title')||attr(opening,'title')||'';
     let original=classLabel(piece,'th-title-oname|original-title');
+    if(provider==='uaserials'&&type==='movie'){
+      // Read only labels tied to this exact href. Never borrow adjacent card metadata.
+      const img=piece.match(/<img\b[^>]*>/i)?.[0]||'';
+      label=label||attr(img,'alt')||attr(img,'title');
+      const title=htmlPlain(label||piece.slice(opening.length).replace(/<\/a\s*>$/i,''));
+      if(!title)continue;
+      const url=articleLink(provider,href,type),existing=matches.find(x=>x.url===url);
+      if(existing){
+        // Prefer a visible title linked to the same article over its image alt.
+        if(classLabel(piece,'th-title(?!-oname)')||piece.match(/<h[23]\b/i))existing.title=title;
+        if(original)existing.original=htmlPlain(original);
+        continue;
+      }
+      add(href,title,original);
+      continue;
+    }
     if(provider==='uaserials'){
       const img=piece.match(/<img\b[^>]*>/i)?.[0]||'';
       const current=articleLink(provider,href,type);
