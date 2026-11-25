@@ -411,7 +411,7 @@ async function importOffline(file){
   try{
     try{await navigator.storage?.persist?.();}catch{}
     await offlineOperation('readwrite','put',{id:crypto.randomUUID(),name:file.name,size:file.size,blob:file,added:Date.now()});
-    toast('Відео збережено для офлайн-перегляду');state.libraryTab='offline';await renderFavorites();
+    toast('Відео збережено для офлайн-перегляду');state.libraryTab='saved';await renderFavorites();
   }catch(e){toast('Не вдалося зберегти файл: '+(e?.message||'ліміт сховища'));}
 }
 const MAX_LOCAL_DOWNLOAD=256*1024*1024;
@@ -469,21 +469,12 @@ function controlDownload(id,action){
   drawDownloads();runDownloadQueue();
 }
 async function renderFavorites(){
-  ++state.loadId;const id=state.loadId;
-  const tabs=[['saved','На майбутнє'],['all','Вибране'],['history','Історія'],['offline','Завантажені']];
-  const tab=state.libraryTab||'saved';
-  const nav='<div class="library-tabs">'+tabs.map(([v,t])=>'<button class="btn '+(v===tab?'primary':'secondary')+'" data-library-tab="'+v+'">'+t+'</button>').join('')+'</div>';
-  if(tab==='offline'){
-    content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+'<div class="settings-card"><p>Імпортуйте власні відеофайли для перегляду без інтернету. Браузер може очищати локальне сховище.</p><input id="offline-import" type="file" accept="video/*,.mp4,.m4v,.mov,.webm"><form id="offline-download-form" class="player-form"><input class="input-line" id="offline-url" type="url" required placeholder="HTTPS-адреса вашого MP4 / WebM"><button class="btn secondary" type="submit">Завантажити</button></form><p class="section-note">Тільки файли, які дозволено зберігати. Потрібна підтримка CORS. Максимум 256 МБ. Після паузи завантаження починається заново.</p></div><div id="download-queue"></div><div id="offline-list">Завантаження…</div>';drawDownloads();
-    const target=$('#offline-list');
-    try{
-      const rows=await offlineOperation('readonly','getAll');
-      if(id!==state.loadId||!target.isConnected)return;
-      target.innerHTML=rows.length?rows.map(r=>'<div class="setting-control offline-row"><span>'+safe(r.name)+' · '+(r.size/1048576).toFixed(1)+' МБ</span><button class="btn secondary" data-offline-play="'+safe(r.id)+'">Дивитися</button><button class="btn danger" data-offline-delete="'+safe(r.id)+'">Видалити</button></div>').join(''):'<p class="muted">Немає локальних відео.</p>';
-    }catch(e){if(target.isConnected)target.textContent='Сховище недоступне: '+e.message;}
-    return;
-  }
-  const items=tab==='history'?Object.values(state.history).sort((a,b)=>b.watchedAt-a.watchedAt):Object.values(state.favorites).filter(i=>tab==='all'||!state.history[keyFor(i)]);
+  ++state.loadId;
+  const tabs=[['saved','На майбутнє'],['history','Історія']];
+  const tab=state.libraryTab==='history'?'history':'saved';
+  state.libraryTab=tab;
+  const nav='<div class="library-tabs">'+tabs.map(([v,t])=>'<button type="button" class="btn '+(v===tab?'primary':'secondary')+'" data-library-tab="'+v+'" aria-pressed="'+(v===tab)+'">'+t+'</button>').join('')+'</div>';
+  const items=tab==='history'?Object.values(state.history).sort((a,b)=>b.watchedAt-a.watchedAt):Object.values(state.favorites).filter(i=>!state.history[keyFor(i)]);
   loadVisibleItems(items);
   content.innerHTML='<div class="page-intro"><h1>Вибране</h1></div>'+nav+(tab==='history'?'<button class="btn secondary" data-clear-history>Очистити історію</button>':'')+(items.length?posterGrid(items):'<div class="empty"><h2>Тут поки порожньо</h2></div>');
 }
@@ -526,7 +517,7 @@ async function renderSettings() {
     <div class="settings-card"><h3>Збережені дані</h3><p>Вибране, джерела та позиції перегляду зберігаються тільки в цьому браузері.</p>
       <div class="setting-control"><span class="muted">Вибране: ${Object.keys(state.favorites).length} · Прогрес: ${Object.keys(state.progress).length}</span><button type="button" class="btn danger" data-clear-local>${icon('trash')} Очистити дані</button></div></div>
     
-    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.48 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
+    <div class="settings-card"><h3>Про UAPlay</h3><p>UAPlay Web v0.5.49 — Switch-style PWA-порт проєкту UAPlay-nx. Застосунок не містить відеофайлів.</p>
       <a class="see-all" href="https://github.com/Small182/UAPlay-nx" target="_blank" rel="noopener noreferrer">Оригінальний Switch-проєкт</a>${legalNotice()}</div>`;
 }
 const viewBackStack=[];
@@ -566,12 +557,13 @@ async function openDetails(key) {
   const basic=state.lists[key] || state.favorites[key];
   if(!basic)return;
   state.activeItem=basic;state.selectedSeason=state.lastEpisode[key]?.season||1;state.selectedEpisode=state.lastEpisode[key]?.episode||1;
-  drawDetails(basic,true);
+  drawDetails(basic);
+  const detail=modal.querySelector('.switch-detail-screen');
   if(state.demoMode)return;
-  try{const data=await api(`/api/title/${basic.type}/${basic.id}`);if(!modal.querySelector('.detail-modal')||keyFor(state.activeItem)!==key)return;state.activeItem={...basic,...data};state.lists[key]=state.activeItem;drawDetails(state.activeItem,false);}
-  catch(e){toast(e.message);drawDetails(basic,false);}
+  try{const data=await api(`/api/title/${basic.type}/${basic.id}`);if(!detail?.isConnected||keyFor(state.activeItem)!==key)return;state.activeItem={...basic,...data};state.lists[key]=state.activeItem;drawDetails(state.activeItem);}
+  catch(e){if(detail?.isConnected&&keyFor(state.activeItem)===key)toast(e.message);}
 }
-function drawDetails(item,loading=false) {
+function drawDetails(item) {
   const poster=imageUrl(item.poster,'w500');const key=keyFor(item);
   modal.innerHTML=`<div class="modal-backdrop" data-close><section class="detail-modal switch-detail-screen" role="dialog" aria-modal="true" aria-label="${safe(item.title)}">
     <button type="button" class="close-modal" data-close aria-label="Закрити">${icon('close')}</button>
@@ -583,7 +575,6 @@ function drawDetails(item,loading=false) {
       <div class="detail-buttons"><button class="btn primary" data-sources="${safe(key)}">${icon('play')} Дивитися</button>
       <button class="btn secondary" data-favorite="${safe(key)}">${icon(state.favorites[key]?'check':'add')} ${state.favorites[key]?'У вибраному':'Вибране'}</button></div>
 
-      ${loading?'<p class="section-note">Завантажуємо подробиці…</p>':''}
     </div><div class="detail-poster">${poster?`<img src="${poster}" alt="Постер: ${safe(item.title)}">`: ''}</div></div></section></div>`;
   if(item.seasonList?.length){const select=$('#season-select');if(select){select.value=String(state.selectedSeason);if(!select.value)select.selectedIndex=0;loadSeason(select.value);}}
 }
@@ -911,7 +902,7 @@ document.addEventListener('click',async event=>{
   if(action.dataset.downloadPause){controlDownload(action.dataset.downloadPause,'pause');return;}
   if(action.dataset.downloadResume){controlDownload(action.dataset.downloadResume,'resume');return;}
   if(action.dataset.downloadCancel){controlDownload(action.dataset.downloadCancel,'cancel');return;}
-  if(action.dataset.libraryTab){state.libraryTab=action.dataset.libraryTab;renderFavorites();return;}
+  if(action.dataset.libraryTab){state.libraryTab=action.dataset.libraryTab==='history'?'history':'saved';renderFavorites();return;}
   if(action.hasAttribute('data-clear-history')){if(confirm('Очистити історію і прогрес, зберігши вибране?')){state.history={};state.progress={};state.episodeProgress={};state.lastEpisode={};save();renderFavorites();}return;}
   if(action.dataset.markWatched){const item=state.lists[action.dataset.markWatched]||state.activeItem;if(item){state.history[keyFor(item)]={...item,watchedAt:Date.now(),completed:true};delete state.progress[keyFor(item)];save();drawDetails(item);}return;}
   if(action.dataset.theme){state.theme=action.dataset.theme;applyAccent();save();renderSettings();return;}
